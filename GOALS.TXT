@@ -1,0 +1,22 @@
+ ---- GOALS OF THIS LIBRARY ----
+
+OSA : Operating System Abstraction
+
+This library is intented to be a wrapper over basic APIs provided by OS, core libraries (e.g. c library) and
+provide some other critical application agnostic utilities. This would aid the programmer to write OS independent
+code easily and automate/abstract solutions to error prone, repetitive tasks in programming.
+
+
+ToC
+1. Data Types
+2. Strings
+3. Memory (copy, move etc)
+3. Sockets
+4. Events
+5. Synchronization :: Threads, Semaphores, Mutexes, conditional variables
+6. Time utilities
+7. Signals
+10. Threadpool
+11. Logging
+
+It is a C++ library. Wrapper functions could be provided later for using it in C.
