@@ -31,7 +31,7 @@ typedef enum
 {
 	OSA_SUCCESS,
 	OSA_ERR_BADPARAM,
-	OSA_ERR_INSUFFICIENTMEMORY,
+	OSA_ERR_INSUFFMEM,
 }ret_e;
 
 
@@ -39,7 +39,9 @@ typedef enum
 * 		U T I L I T Y    F U N C T I O N S 
 **************************************************/
 
-char * osa_GetErrString(ret_e ret);
+char * osa_ret_e_2_String(ret_e ret);
+char * osa_sockDomain_e_2_String(osa_sockDomain_e domain);
+char * osa_sockType_e_2_String(osa_sockType_e type);
 
 /****************************************
 * 		String Processing
@@ -77,18 +79,18 @@ char * osa_strstr(char * haystack, char * needle);
 *			M E M O R Y
 *****************************************/
 
-void * osa_malloc(i32_t sz);									/* Allocates 'sz' bytes on heap and returns the pointer. 
+void * osa_malloc(u32_t sz);									/* Allocates 'sz' bytes on heap and returns the pointer. 
 																	Returns NULL on failure */
-void * osa_calloc(i32_t sz);    								/* Allocates 'sz' bytes on heap. Sets all bytes to 0 (zero) and 
+void * osa_calloc(u32_t sz);    								/* Allocates 'sz' bytes on heap. Sets all bytes to 0 (zero) and 
 																	returns the pointer. Returns NULL on failure */
-void * osa_realloc(void * buf, i32_t sz);						/* Allocates a new buffer of size 'sz' and copies the old buffer
+void * osa_realloc(void * buf, u32_t sz);						/* Allocates a new buffer of size 'sz' and copies the old buffer
 																	content to new one and frees the old buffer. If new size is 
 																	less than old, only new sz bytes of data will be copied. */
 void osa_free(void * buf);										/* Free the buffer */
 
 
 /****************************************
-*			S O C K E T S
+	*			S O C K E T S
 *****************************************/
 
 #ifdef __linux__
@@ -99,7 +101,17 @@ typedef int32_t  				osa_ioHd_t; 	/** TO DO: int32_t or int ?? **/
 										equivalent structure uses 108. Hences using the maximum value available */
 
 typedef enum osa_sockErr_e
-{}osa_sockErr_e;
+{
+	OSA_SOCKERR_SUCCESS;
+	OSA_SOCKERR_ACCESS,				/* Permission to create socket denied by OS */
+	OSA_SOCKERR_UNKNOWNPROTO,		/* Unknown protocol */
+	OSA_SOCKERR_EMFILE,				/* Process file table overflow. Process has open max allowed open files already */
+	OSA_SOCKERR_ENFILE,				/* Globally, max allowed open files (including all running processes) is reached */
+	OSA_SOCKERR_INSUFFMEM,			/* OS doesn't have enough memory to open socket */
+	OSA_SOCKERR_EPROTONOSUPPORT,	/* Protocol not supported in this domain */
+	OSA_SOCKERR_UNKNOWNERR;
+
+}osa_sockErr_e;
 
 /* Socket domain :: This determines/indicates the kind of socket - unix-socket/ipv4-socket/ipv6-socket etc */
 typedef enum
@@ -117,7 +129,6 @@ typedef enum
 	OSA_SOCK_STREAM,
 	OSA_SOCK_SEQPACKET,
 	OSA_SOCK_RAW,
-	OSA_SOCK_PACKET,
 }osa_sockType_e;
 
 /* osa_sockAddr_t: Structure to hold socket address.
@@ -141,7 +152,7 @@ typedef struct osa_sockAddr_t
    IN appData	   : Caller provided pointer. This could point to a structure/buffer in caller  memory.
 				     Caller can deference and use it in this callback function.
 */
-void (*osa_sendCompleteCb)(osa_ioHd_t &hd, void * appData);
+void (*osa_sendCompleteCb)(osa_socket &sock, void * appData);
 
 
 /* recvReadyCb    : Recv ready indication callback for non-blocking io recv (e.g. socket recv). 
@@ -153,10 +164,15 @@ void (*osa_sendCompleteCb)(osa_ioHd_t &hd, void * appData);
    IN appData	  : Caller provided pointer. This could point to a structure/buffer in caller  memory.
 				    Caller can deference and use it in this callback function.
 */
-void (*osa_recvReadyCb)(osa_ioHd_t &hd, void * appData);
+void (*osa_recvReadyCb)(osa_socket &sock, void * appData);
 
 
-/* osa_socket 	: Create a socket. (This creates an empty socket. It needs to be configured with further 
+class osa_socket
+{
+
+public:
+
+/* create 	: Create a socket. (This creates an empty socket. It needs to be configured with further 
 				  API calls before it can be used)
 
 	IN domain 	:: AF_UNIX/AF_INET/AF_INET6/AF_NETLINK/AF_PACKET (Mainly these would be the values)
@@ -166,20 +182,23 @@ void (*osa_recvReadyCb)(osa_ioHd_t &hd, void * appData);
 	IN protocol :: Normally it should be set to 0 (zero). Others need advance knowledge.
 	OUT sockErr :: Socket specific error
 */
-ret_e osa_socket(osa_ioHd_t &socket, osa_sockDomain_e domain, osa_sockType_e type, i32_t protocol, osa_SockErr_e &sockErr);
+	ret_e create(osa_sockDomain_e domain, osa_sockType_e type, i32_t protocol, osa_SockErr_e &sockErr);
+
+/* Set the socket for asynchronous io. Refer Asynchronous IO section for details */
+	ret_e makeASynchronous(osa_sendCompleteCb sendCompleteCb, osa_recvReadyCb recvReadyCb, void * appData);
 
 
-/* osa_bind		: Bind an address to the empty socket.
+/* bind		: Bind an address to the empty socket.
 
 	IN addr 	: This provides Domain, address and port. Address is to be provided in textual format and 
 				  port is in host byte order.
 				  Address and port and converted to appropriate formats internally based on the domain
 				  parameter.
 */
-ret_e osa_sock_bind(osa_ioHd_t &socket, osa_sockAddr_t &addr, osa_SockErr_e &sockErr);
+	ret_e bind(osa_sockAddr_t &addr, osa_SockErr_e &sockErr);
 
 
-/* osa_sock_listen	: Start listening for new connections. This tells the operating systems that we are now ready to accept
+/* listen	: Start listening for new connections. This tells the operating systems that we are now ready to accept
 				  new connections. Only valid for TCP sockets (SOCK_STREAM/SEQPACKET) and UDP (SOCK_DGRAM) doesn't have a 
 				  concept of 'connection'.
 				  The listening will start on address and port given in bind call earlier. If bind was not called, operating
@@ -188,17 +207,17 @@ ret_e osa_sock_bind(osa_ioHd_t &socket, osa_sockAddr_t &addr, osa_SockErr_e &soc
 	IN maxCon	: Maximum number of simultanuous connections allowed. This will determine the maximum number of clients
 				  that can connect to this server.
 */
-ret_e osa_sock_listen(osa_ioHd_t &socket, i32_t maxCon, osa_SockErr_e &sockErr);
+	ret_e listen(i32_t maxCon, osa_SockErr_e &sockErr);
 
 
-/* osa_accept	: Accept a new connection. Only valid for TCP sockets (SOCK_STREAM/SEQPACKET).
+/* accept	: Accept a new connection. Only valid for TCP sockets (SOCK_STREAM/SEQPACKET).
 				  If the socket is marked as asynchronous, this function should be called in osa_recvReadyCb() callback.
 
    IN remoteAddr: Remote address and port.
 */
-ret_e osa_sock_accept(osa_ioHd_t &socket, osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+   ret_e accept(osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
 
-/* osa_sock_connect	: Connect to a remote socket. If 'socket' is a TCP socket, then this call attempts to establish a tcp 
+/* connect	: Connect to a remote socket. If 'socket' is a TCP socket, then this call attempts to establish a tcp 
 				  	  connection with remote server (with address remoteAddr). 
 				  	  If its a UDP socket, this call tells the operating system that only packets from remoteAddr will/should 
 				  	  be accepted. Packets coming from any other address will be rejected by OS and will not be delivered to 
@@ -206,10 +225,10 @@ ret_e osa_sock_accept(osa_ioHd_t &socket, osa_sockAddr_t &remoteAddr, osa_SockEr
 
    IN remoteAddr: Remote socket address (family, address, port). 
 */
-ret_e osa_sock_connect(osa_ioHd_t &socket, osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+   ret_e connect(osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
 
 
-/* osa_sock_send	: Send data on a socket. Can be used for a connected (tcp) socket.
+/* send	: Send data on a socket. Can be used for a connected (tcp) socket.
 					  If socket has been configured for asynchronous io (with osa_io_makeASynchronous), this
 					  data will be added to an internal queue and once that is sent out, sendCompleteCb() will be called.
 
@@ -218,10 +237,10 @@ ret_e osa_sock_connect(osa_ioHd_t &socket, osa_sockAddr_t &remoteAddr, osa_SockE
 	IN flags 		: Flags control certain aspects of send operation. It is bitwise OR of the values to be given.
 						e.g. MSG_DONTROUTE, MSG_OOB. (Flags may change depending on the platform/OS being used)
 */
-ret_e osa_sock_send(osa_ioHd_t &socket, void * buf, i32_t len, i32_t flags, osa_SockErr_e &sockErr);
+	ret_e send(void * buf, i32_t len, i32_t flags, osa_SockErr_e &sockErr);
 
 
-/* osa_sock_sendto	: Send data on a socket. Can be used for a datagram (udp) socket (as well as tcp. For TCP, remoteAddr
+/* sendto	: Send data on a socket. Can be used for a datagram (udp) socket (as well as tcp. For TCP, remoteAddr
 					  should be empty). If socket has been configured for asynchronous io (with osa_io_makeASynchronous), 
 					  this data will be added to an internal queue and once that is sent out, sendCompleteCb() will be called.
 
@@ -230,10 +249,10 @@ ret_e osa_sock_send(osa_ioHd_t &socket, void * buf, i32_t len, i32_t flags, osa_
 	IN flags 		: Flags control certain aspects of send operation. It is bitwise OR of the values to be given.
 						e.g. MSG_DONTROUTE, MSG_OOB. (Flags may change depending on the platform/OS being used)
 */
-ret_e osa_sock_sendto(osa_ioHd_t &socket, void * buf, i32_t len, i32_t flags, osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+	ret_e sendto(void * buf, i32_t len, i32_t flags, osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
 
 
-/* osa_sock_recv 	: Receive data from socket. Can be used with connected (tcp) sockets.
+/* recv 	: Receive data from socket. Can be used with connected (tcp) sockets.
 					  If socket has been configured for asynchronous io (with osa_io_makeASynchronous), this function 
 					  should be called in osa_recvReadyCb callback.
 					  
@@ -242,10 +261,10 @@ ret_e osa_sock_sendto(osa_ioHd_t &socket, void * buf, i32_t len, i32_t flags, os
 	OUT bytesRead 	: Actual number of bytes copied in 'buf' by OS
 	IN  flags 		: e.g. PEEK : This returns the length of available data. You can increase the buffer size if 
 */
-ret_e osa_sock_recv(osa_ioHd_t &socket, void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, osa_SockErr_e &sockErr);
+	ret_e recv(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, osa_SockErr_e &sockErr);
 
 
-/* osa_sock_recvfrom: Receive data from socket. Can be used with connected and datagram (tcp/udp) sockets.
+/* recvfrom: Receive data from socket. Can be used with connected and datagram (tcp/udp) sockets.
 					  If socket has been configured for asynchronous io (with osa_io_makeASynchronous), this function 
 					  should be called in osa_recvReadyCb callback.
 
@@ -255,14 +274,14 @@ ret_e osa_sock_recv(osa_ioHd_t &socket, void * buf, i32_t bufSize, i32_t *bytesR
 	IN  flags 		: e.g. MSG_PEEK //TO DO: Add enum
 	OUT remoteAddr	: Remote socket details (address, port)
 */
-ret_e osa_sock_recvfrom(osa_ioHd_t &socket, void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, 
-													osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+	ret_e recvfrom(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, 
+		osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
 
 
-/* osa_sock_close 	: Close the socket. This call closes the socket and frees the socket context inside kernel */
-ret_e osa_sock_close(osa_ioHd_t &socket);
+/* destroy 	: Close the socket. This call closes the socket and frees the socket context inside kernel */
+	ret_e destroy();
 
-
+};
 
 
 
