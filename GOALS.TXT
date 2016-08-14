@@ -20,3 +20,12 @@ ToC
 11. Logging
 
 It is a C++ library. Wrapper functions could be provided later for using it in C.
+
+
+
+
+Points to remember
+-------------------
+
+1. Always compile with 'Treat warning as errors' flag. Mismatch in number of arguments to printf is a nasty error)
+	- For gcc give '-Werror' on command line.

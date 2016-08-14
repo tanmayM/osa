@@ -32,6 +32,8 @@ typedef enum
 	OSA_SUCCESS,
 	OSA_ERR_BADPARAM,
 	OSA_ERR_INSUFFMEM,
+	OSA_ERR_COREFUNCFAIL,	/* OSA functions will usually call some OS provided core function. This error value tells that that 
+							   function returned an error */
 }ret_e;
 
 
@@ -39,13 +41,16 @@ typedef enum
 * 		U T I L I T Y    F U N C T I O N S 
 **************************************************/
 
-char * osa_ret_e_2_String(ret_e ret);
-char * osa_sockDomain_e_2_String(osa_sockDomain_e domain);
-char * osa_sockType_e_2_String(osa_sockType_e type);
+/* Get enum names as character strings. Very useful in debugging huge logs */
+char * osa_enum2Str(ret_e ret);
+char * osa_enum2Str(osa_sockDomain_e domain);
+char * osa_enum2Str(osa_sockType_e type);
 
 /****************************************
 * 		String Processing
 *****************************************/
+
+ret_e osa_strlen(char * str);		/* Get length of string (NULL character at the end is not counted) */
 
 ret_e osa_strcpy(char *dst, char * src, i32_t dstSz);			/* copy string src to dst. Max (dstSz-1) bytes will be 
 																   copied */
@@ -102,23 +107,26 @@ typedef int32_t  				osa_ioHd_t; 	/** TO DO: int32_t or int ?? **/
 
 typedef enum osa_sockErr_e
 {
-	OSA_SOCKERR_SUCCESS;
+	OSA_SOCK_SUCCESS;
 	OSA_SOCKERR_ACCESS,				/* Permission to create socket denied by OS */
 	OSA_SOCKERR_UNKNOWNPROTO,		/* Unknown protocol */
 	OSA_SOCKERR_EMFILE,				/* Process file table overflow. Process has open max allowed open files already */
 	OSA_SOCKERR_ENFILE,				/* Globally, max allowed open files (including all running processes) is reached */
 	OSA_SOCKERR_INSUFFMEM,			/* OS doesn't have enough memory to open socket */
 	OSA_SOCKERR_EPROTONOSUPPORT,	/* Protocol not supported in this domain */
-	OSA_SOCKERR_UNKNOWNERR;
+	OSA_SOCKERR_ADDRINUSE, 			/* Address is in use */
+	OSA_SOCKERR_BADHANDLE, 			/* Socket handle is not valid */
+	OSA_SOCKERR_SOCKINUSE, 			/* Socket descriptor already in use */
+	OSA_SOCKERR_UNKNOWN,
 
 }osa_sockErr_e;
 
 /* Socket domain :: This determines/indicates the kind of socket - unix-socket/ipv4-socket/ipv6-socket etc */
 typedef enum
 {
-	OSA_AF_UNIX,
-	OSA_AF_INET4,
+	OSA_AF_INET,
 	OSA_AF_INET6,
+	OSA_AF_UNIX,
 	OSA_AF_NETLINK,
 	OSA_AF_PACKET,
 }osa_sockDomain_e;
@@ -131,17 +139,32 @@ typedef enum
 	OSA_SOCK_RAW,
 }osa_sockType_e;
 
-/* osa_sockAddr_t: Structure to hold socket address.
+/* osa_sockAddrIn_t: Structure to hold IP socket address.
 	addr : This is plaintext ip address (as character string e.g. "100.1.2.3").
-	port : This is TCP/UDP port in host byte order.
+	port : This is TCP/UDP port in HOST BYTE ORDER.
 */
-typedef struct osa_sockAddr_t
+typedef struct osa_sockAddrIn_t
 {
 	osa_sockDomain_e domain;
-	u8_t 			 addr[SOCKADDR_MAX_STR_SZ];
+	char 			 addr[SOCKADDR_MAX_STR_SZ];
 	u16_t			 port; 
-}osa_sockAddr_t;
+	/* IPv6 specific. Do we need them?
+	u32_t 			 flowInfo;
+	u32_t 			 scope_id; 
+	*/
+}osa_sockAddrIn_t;
 
+/* osa_sockAddrGeneric_t : The Socket IPC has become ubiquitous and many address families (domains) are created to
+						   use sockets for various tasks. This generic structure is used to wrap all of those.
+	addr : This should be a pointer to domain specific structure. Library will internally typecast it according to domain
+	addrLen : Size of the buffer/structure pointed to by 'addr'
+*/
+typedef struct osa_sockAddrGeneric_t
+{
+	osa_sockDomain_e domain;
+	void *			 addr;
+	u32_t 			 addrLen;
+}
 
 
 /* osa_sendCompleteCb : Send complete indication callback for non-blocking (asynchronous) io send (e.g. socket send).
@@ -195,7 +218,14 @@ public:
 				  Address and port and converted to appropriate formats internally based on the domain
 				  parameter.
 */
-	ret_e bind(osa_sockAddr_t &addr, osa_SockErr_e &sockErr);
+	ret_e bind(osa_sockAddrIn_t &addr, osa_SockErr_e &sockErr);
+
+/* bind		: Bind an address to the empty socket.
+
+	IN addr 	: This provides Domain and address. Address is internall typecasted to specific structure
+				  based on domain				  
+*/
+	ret_e bind(osa_sockAddrGeneric_t &addr, osa_SockErr_e &sockErr);
 
 
 /* listen	: Start listening for new connections. This tells the operating systems that we are now ready to accept
@@ -280,6 +310,9 @@ public:
 
 /* destroy 	: Close the socket. This call closes the socket and frees the socket context inside kernel */
 	ret_e destroy();
+
+private:
+	int sockFd;
 
 };
 
