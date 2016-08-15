@@ -33,7 +33,7 @@ typedef enum
 	OSA_ERR_BADPARAM,
 	OSA_ERR_INSUFFMEM,
 	OSA_ERR_COREFUNCFAIL,	/* OSA functions will usually call some OS provided core function. This error value tells that that 
-							   function returned an error */
+							   function returned an error. You need to check platform specific error details */
 }ret_e;
 
 
@@ -108,7 +108,8 @@ typedef int32_t  				osa_ioHd_t; 	/** TO DO: int32_t or int ?? **/
 typedef enum osa_sockErr_e
 {
 	OSA_SOCK_SUCCESS;
-	OSA_SOCKERR_ACCESS,				/* Permission to create socket denied by OS */
+	OSA_SOCKERR_ACCESS,				/* Permission denied */
+	OSA_SOCKERR_INVAL, 				/* Invalid parameter or operation */
 	OSA_SOCKERR_UNKNOWNPROTO,		/* Unknown protocol */
 	OSA_SOCKERR_EMFILE,				/* Process file table overflow. Process has open max allowed open files already */
 	OSA_SOCKERR_ENFILE,				/* Globally, max allowed open files (including all running processes) is reached */
@@ -117,6 +118,8 @@ typedef enum osa_sockErr_e
 	OSA_SOCKERR_ADDRINUSE, 			/* Address is in use */
 	OSA_SOCKERR_BADHANDLE, 			/* Socket handle is not valid */
 	OSA_SOCKERR_SOCKINUSE, 			/* Socket descriptor already in use */
+	OSA_SOCKERR_IFACEDOWN, 			/* Network interface is down */
+	OSA_SOCKERR_OPNOTSUPP,			/* This operation is not supported on this socket type */
 	OSA_SOCKERR_UNKNOWN,
 
 }osa_sockErr_e;
@@ -126,9 +129,11 @@ typedef enum
 {
 	OSA_AF_INET,
 	OSA_AF_INET6,
-	OSA_AF_UNIX,
+	OSA_AF_UNIX,	/* This is unix specific domain. You need to use 'struct sockaddr_un' in generic socket API
+						to use this domain */
 	OSA_AF_NETLINK,
-	OSA_AF_PACKET,
+	OSA_AF_PACKET, 	/* This is unix specific PACKET domain. You need to use 'struct sockaddr_ll' in generic socket API
+						to use this domain */
 }osa_sockDomain_e;
 
 typedef enum 
@@ -232,7 +237,7 @@ public:
 				  new connections. Only valid for TCP sockets (SOCK_STREAM/SEQPACKET) and UDP (SOCK_DGRAM) doesn't have a 
 				  concept of 'connection'.
 				  The listening will start on address and port given in bind call earlier. If bind was not called, operating
-				  system will usually assign an address and port and starts listening on that.
+				  system will usually assign an address and port and start listening on that.
 
 	IN maxCon	: Maximum number of simultanuous connections allowed. This will determine the maximum number of clients
 				  that can connect to this server.
@@ -244,8 +249,10 @@ public:
 				  If the socket is marked as asynchronous, this function should be called in osa_recvReadyCb() callback.
 
    IN remoteAddr: Remote address and port.
+
+   TO DO: Find out what is the remote address in case of unix domain stream socket!!!
 */
-   ret_e accept(osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+   ret_e accept(osa_socket &newStreamSock, osa_SockErr_e &sockErr);
 
 /* connect	: Connect to a remote socket. If 'socket' is a TCP socket, then this call attempts to establish a tcp 
 				  	  connection with remote server (with address remoteAddr). 
