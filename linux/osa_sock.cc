@@ -102,6 +102,35 @@ static osa_SockErr_e unixSockErr2osaSockErr()
 	}
 }
 
+static void unixStruct2OsaStruct(struct sockaddr_in &src, osa_sockaddrIn_t &dst)
+{
+	dst.domain = src.sin_family;
+	dst.port = src.sin_port;
+	strcpy(dst.addr, inet_ntoa(src.sin_addr));
+}
+
+static void unixStruct2OsaStruct(struct sockaddr_in6 &src6, osa_sockaddrIn_t &dst6)
+{
+	dst6.domain = src6.sin_family;
+	dst6.port = src6.sin_port;
+	strcpy(dst6.addr, inet_ntoa(src6.sin_addr));
+}
+
+static int osaStruct2unixStruct(osa_sockaddrIn_t &src, struct sockaddr_in &dst )
+{
+	dst.sin_family = osa2UnixSockDomain(src.domain);
+	dst.sin_port = htons(src.port);
+	return inet_pton(dst.sin_family, (const char *)src.addr, (void *)&dst.sin_addr);
+}
+
+static int osaStruct2unixStruct(osa_sockaddrIn_t &src6, struct sockaddr_in6 &dst6 )
+{
+	dst6.sin6_family = osa2UnixSockDomain(src6.domain);;
+	dst6.sin6_port   = htons(src6.port);
+	return inet_pton(dst6.sin_family, (const char *)src6.addr, (void *)&dst6.sin6_addr);
+}
+
+
 ret_e osa_socket::create(osa_socskDomain_e domain, osa_sockType_e type, i32_t proto, osa_SockErr_e &sockErr)
 {
 	char * func="osa_socket::create";
@@ -181,6 +210,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_SockErr_e &sockErr)
 	{
 		case OSA_AF_INET:
 		{
+			/* TO DO: Use convertion function */
 			result = inet_pton(unixDomain, (const char *)sockAddr.addr, (void *)&sAddr.sin_addr);
 			if(1 != result)
 			{
@@ -213,6 +243,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_SockErr_e &sockErr)
 		break;
 		case OSA_AF_INET6:
 		{
+			/* TO DO: Use convertion function */
 			result = inet_pton(unixDomain, (const char *)sockAddr.addr, (void *)&sAddr6.sin6_addr);
 			if(1 != result)
 			{
@@ -411,17 +442,38 @@ ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_SockErr_e &sockErr)
 	{
 		newStreamSock.setSockFd(newSockFd);
 
-		osa_sockDomain_e domain;
-		domain = unix2OsaSockDomain(sockAddr.sa_family);
-		osa_log_info("%s: socket accept success. Domain=%s", func, osa_enum2str(domain));
-		switch(domain)
+		switch(sockAddr.sa_family)
 		{
-			case OSA_AF_INET:
-				struct sockaddr_in sAddrIn, dAddrIn;
-				getsockname(newSockFd, &sAddrIn, sizeof(struct sockaddr_in));
-				getpeername(newSockFd, &dAddrIn, sizeof(struct sockaddr_in));
-				/* TO DO : Add getIp, getPort functions */
-				osa_log_info();
+			case AF_INET:
+			{
+				struct sockaddr_in sAddrUnix, rAddrUnix;
+				osa_sockAddrIn_t sAddrOsa, rAddrOsa;
+
+				getsockname(newSockFd, &sAddrUnix, sizeof(struct sockaddr_in));
+				getpeername(newSockFd, &rAddrUnix, sizeof(struct sockaddr_in));
+				unixStruct2OsaStruct(sAddrUnix, sAddrOsa); 
+				unixStruct2OsaStruct(rAddrUnix, rAddrOsa); 
+
+				osa_log_info("%s: socket accept success. Domain=%s, lAddr=%s, lPort=%d, rAddr=%s, rPort=%d", func, 
+					osa_enum2str(sAddrOsa.domain), sAddrOsa.addr, sAddrOsa.port, rAddrOsa.addr, rAddrOsa.port);
+			}
+			break;
+			case AF_INET6:
+			{
+				struct sockaddr_in6 sAddrUnix, rAddrUnix;
+				osa_sockAddrIn_t sAddrOsa, rAddrOsa;
+
+				getsockname(newSockFd, &sAddrUnix, sizeof(struct sockaddr_in6));
+				getpeername(newSockFd, &rAddrUnix, sizeof(struct sockaddr_in6));
+				unixStruct2OsaStruct(sAddrUnix, sAddrOsa); 
+				unixStruct2OsaStruct(rAddrUnix, rAddrOsa); 
+
+				/* TO DO: Implement GetSockAddr and GetSockRemoteAddr */
+
+				osa_log_info("%s: socket accept success. Domain=%s, lAddr=%s, lPort=%d, rAddr=%s, rPort=%d", func, 
+					osa_enum2str(sAddrOsa.domain), sAddrOsa.addr, sAddrOsa.port, rAddrOsa.addr, rAddrOsa.port);
+			}
+			break;
 		}
 		sockErr = OSA_SOCK_SUCCESS;
 		ret = OSA_SUCCESS;
