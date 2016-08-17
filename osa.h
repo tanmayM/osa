@@ -120,6 +120,7 @@ typedef enum osa_sockErr_e
 	OSA_SOCKERR_SOCKINUSE, 			/* Socket descriptor already in use */
 	OSA_SOCKERR_IFACEDOWN, 			/* Network interface is down */
 	OSA_SOCKERR_OPNOTSUPP,			/* This operation is not supported on this socket type */
+	OSA_SOCKERR_NOTCONN, 			/* The socket is not connected */
 	OSA_SOCKERR_UNKNOWN,
 
 }osa_sockErr_e;
