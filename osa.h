@@ -9,6 +9,13 @@
 
 #endif
 
+
+#define LOGLVL_ERROR	0
+#define LOGLVL_INFO 	1
+#define LOGLVL_DEBUG 	2
+
+#define LOG_LEVEL		LOGLVL_DEBUG
+
 /****************************************************
 * 		D A T A    T Y P E   W R A P E R S 
 *****************************************************/
@@ -325,6 +332,7 @@ private:
 };
 
 
+/* TO DO :socketpair */
 
 
 /********************************************************

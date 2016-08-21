@@ -81,7 +81,7 @@ static int o_getUnixSockType(osa_sockType_e type)
 	}
 }
 
-static osa_SockErr_e o_unixS2osaSockErr()
+static osa_SockErr_e o_unix2osaSockErr()
 {
 	switch(errno)
 	{
@@ -103,28 +103,28 @@ static osa_SockErr_e o_unixS2osaSockErr()
 	}
 }
 
-static void o_unixStruct2OsaStruct(struct sockaddr_in &src, osa_sockaddrIn_t &dst)
+static void o_unix2OsaStruct(struct sockaddr_in &src, osa_sockaddrIn_t &dst)
 {
 	dst.domain = src.sin_family;
 	dst.port = src.sin_port;
 	strcpy(dst.addr, inet_ntoa(src.sin_addr));
 }
 
-static void o_unixStruct2OsaStruct(struct sockaddr_in6 &src6, osa_sockaddrIn_t &dst6)
+static void o_unix2OsaStruct(struct sockaddr_in6 &src6, osa_sockaddrIn_t &dst6)
 {
 	dst6.domain = src6.sin_family;
 	dst6.port = src6.sin_port;
 	strcpy(dst6.addr, inet_ntoa(src6.sin_addr));
 }
 
-static int o_osaStruct2unixStruct(osa_sockaddrIn_t &src, struct sockaddr_in &dst )
+static int o_osa2unixStruct(osa_sockaddrIn_t &src, struct sockaddr_in &dst )
 {
 	dst.sin_family = o_osa2UnixSockDomain(src.domain);
 	dst.sin_port = htons(src.port);
 	return inet_pton(dst.sin_family, (const char *)src.addr, (void *)&dst.sin_addr);
 }
 
-static int o_osaStruct2unixStruct(osa_sockaddrIn_t &src6, struct sockaddr_in6 &dst6 )
+static int o_osa2unixStruct(osa_sockaddrIn_t &src6, struct sockaddr_in6 &dst6 )
 {
 	dst6.sin6_family = o_osa2UnixSockDomain(src6.domain);;
 	dst6.sin6_port   = htons(src6.port);
@@ -156,7 +156,7 @@ ret_e osa_socket::getSockAddr(osa_sockAddrIn_t &sAddrOsa)
 					sockFd, strerror(errno), errno);
 				return OSA_ERR_COREFUNCFAILED;
 			}
-			o_unixStruct2OsaStruct(sAddrInUnix, sAddrOsa); 
+			o_unix2OsaStruct(sAddrInUnix, sAddrOsa); 
 		}
 		break;
 		case AF_INET6:
@@ -169,7 +169,7 @@ ret_e osa_socket::getSockAddr(osa_sockAddrIn_t &sAddrOsa)
 					sockFd, strerror(errno), errno);
 				return OSA_ERR_COREFUNCFAILED;
 			}
-			o_unixStruct2OsaStruct(sAddrIn6Unix, sAddrOsa); 
+			o_unix2OsaStruct(sAddrIn6Unix, sAddrOsa); 
 		}
 		break;
 	}
@@ -202,7 +202,7 @@ ret_e osa_socket::getsockPeerAddr(osa_sockAddrIn_t &peerAddrOsa)
 					sockFd, strerror(errno), errno);
 				return OSA_ERR_COREFUNCFAILED;
 			}
-			o_unixStruct2OsaStruct(sAddrInUnix, peerAddrOsa); 
+			o_unix2OsaStruct(sAddrInUnix, peerAddrOsa); 
 		}
 		break;
 		case AF_INET6:
@@ -215,12 +215,17 @@ ret_e osa_socket::getsockPeerAddr(osa_sockAddrIn_t &peerAddrOsa)
 					sockFd, strerror(errno), errno);
 				return OSA_ERR_COREFUNCFAILED;
 			}
-			o_unixStruct2OsaStruct(sAddrIn6Unix, peerAddrOsa); 
+			o_unix2OsaStruct(sAddrIn6Unix, peerAddrOsa); 
 		}
 		break;
 	}
 
 	return OSA_SUCCESS;
+}
+
+void osa_socket :: setSockFd(int newSockFd)
+{
+	sockFd = newSockFd;
 }
 
 
@@ -261,13 +266,15 @@ ret_e osa_socket::create(osa_socskDomain_e domain, osa_sockType_e type, i32_t pr
 		osa_loge("%s: socket creation failed. Domain=%s, Type=%s, Proto=%d, errno=%s (%d)", func, 
 			osa_enum2Str(domain), osa_enum2Str(type), proto, strerror(errno), errno);
 
-		sockErr = o_unixS2osaSockErr();
+		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAILED;
 	}
 	else
 	{
+#if (LOGLEVEL >= LOGLVL_INFO)
 		osa_logi("%s: socket created successfully. Domain=%s, Type=%s, Proto=%d", func, 
 			osa_enum2Str(domain), osa_enum2Str(type), proto);
+#endif
 
 		sockErr = OSA_SOCK_SUCCESS;
 		ret = OSA_SUCCESS;
@@ -304,16 +311,13 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_SockErr_e &sockErr)
 	{
 		case OSA_AF_INET:
 		{
-			/* TO DO: Use convertion function */
-			result = inet_pton(unixDomain, (const char *)sockAddr.addr, (void *)&sAddr.sin_addr);
+			result = o_osa2unixStruct(sockAddr, saddr);
+
 			if(1 != result)
 			{
 				osa_loge("%s: Invalid IP address:%s. inet_pton returned %d. returning", func, sockAddr.addr, result);
 				return OSA_ERR_BADPARAM;
 			}
-
-			sAddr.sin_family = unixDomain;
-			sAddr.sin_port   = htons(sockAddr.port);
 
 			result = bind(sockFd, &sAddr, sizeof(sAddr));
 
@@ -322,13 +326,15 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_SockErr_e &sockErr)
 				osa_loge("%s: socket bind failed. Addr.domain=%s, Addr.ip=%s, Addr.port=%d, errno=%s (%d)", func,
 					osa_enum2str(sockAddr.domain), sAddr.addr, sAddr,port, strerror(errno), errno);
 
-				sockErr = o_unixS2osaSockErr();
+				sockErr = o_unix2osaSockErr();
 				ret = OSA_ERR_COREFUNCFAILED;
 			}
 			else
 			{
+#if (LOGLEVEL >= LOGLVL_INFO)
 				osa_logi("%s: socket bind success. Addr.domain=%s, Addr.ip=%s, Addr.port=%d", func,
 					osa_enum2str(sockAddr.domain), sAddr.addr, sAddr,port);
+#endif
 
 				sockErr = OSA_SOCK_SUCCESS;
 				ret = OSA_SUCCESS;
@@ -337,16 +343,13 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_SockErr_e &sockErr)
 		break;
 		case OSA_AF_INET6:
 		{
-			/* TO DO: Use convertion function */
-			result = inet_pton(unixDomain, (const char *)sockAddr.addr, (void *)&sAddr6.sin6_addr);
+			result = o_osa2unixStruct(sockAddr, saddr);
 			if(1 != result)
 			{
 				osa_loge("%s: Invalid IP address:%s. inet_pton returned %d. returning", func, sockAddr.addr, result);
 				return OSA_ERR_BADPARAM;
 			}
 
-			sAddr6.sin6_family = unixDomain;
-			sAddr6.sin6_port   = htons(sockAddr.port);
 
 			result = bind(sockFd, &sAddr6, sizeof(sAddr6));
 
@@ -355,13 +358,15 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_SockErr_e &sockErr)
 				osa_loge("%s: socket bind failed. Addr.domain=%s, Addr.ip=%s, Addr.port=%d, errno=%s (%d)", 
 					func, osa_enum2str(sockAddr.domain), sAddr6.addr, sAddr6,port, strerror(errno), errno);
 
-				sockErr = o_unixS2osaSockErr();
+				sockErr = o_unix2osaSockErr();
 				ret = OSA_ERR_COREFUNCFAILED;
 			}
 			else
 			{
+#if (LOGLEVEL >= LOGLVL_INFO)
 				osa_logi("%s: socket bind success. Addr.domain=%s, Addr.ip=%s, Addr.port=%d", 
 					func, osa_enum2str(sockAddr.domain), sAddr6.addr, sAddr6,port);
+#endif
 
 				sockErr = OSA_SOCK_SUCCESS;
 				ret = OSA_SUCCESS;
@@ -423,13 +428,15 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_SockErr_e &sockErr)
 				osa_loge("%s: socket bind failed. Addr.domain=%s, socket-path=%s, errno=%s (%d)", func,
 					osa_enum2str(sockAddr.domain), saddrun.sun_path, strerror(errno), errno);
 
-				sockErr = o_unixS2osaSockErr();
+				sockErr = o_unix2osaSockErr();
 				ret = OSA_ERR_COREFUNCFAILED;
 			}
 			else
 			{
+#if (LOGLEVEL >= LOGLVL_INFO)
 				osa_logi("%s: socket bind success. Addr.domain=%s, socket-path=%s", func,
 					osa_enum2str(sockAddr.domain), saddrun.sun_path);
+#endif
 
 				sockErr = OSA_SOCK_SUCCESS;
 				ret = OSA_SUCCESS;
@@ -458,16 +465,18 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_SockErr_e &sockErr)
 					t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7],
 					strerror(errno), errno);
 
-				sockErr = o_unixS2osaSockErr();
+				sockErr = o_unix2osaSockErr();
 				ret = OSA_ERR_COREFUNCFAILED;
 			}
 			else
 			{
+#if (LOGLEVEL >= LOGLVL_INFO)
 				osa_logi("%s: socket bind success. Addr.domain=%s, proto=%d (in networkByteOrder:%d), ifIndex=%d,
 					hatype=%d, pktType=%d, halen=%d, addr=%x:%x:%x:%x:%x:%x:%x:%x", 
 					osa_enum2str(sockAddr.domain), ntohs(sAddrPkt->sll_protocol), sAddrPkt->sll_protocol, 
 					sAddrPkt->sll_ifindex, sAddrPkt->sll_hatype, sAddrPkt->sll_pkttype, sAddrPkt->sll_halen,
 					t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7]);
+#endif
 
 				sockErr = OSA_SOCK_SUCCESS;
 				ret = OSA_SUCCESS;
@@ -495,12 +504,14 @@ ret_e osa_socket :: listen(i32_t maxCon, osa_SockErr_e &sockErr)
 	{
 		osa_loge("%s: socket listen failed. maxCon=%d, errno=%s (%d)", func, maxCon, strerror(errno), errno);
 
-		sockErr = o_unixS2osaSockErr();
+		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAILED;
 	}
 	else
 	{
+#if (LOGLEVEL >= LOGLVL_INFO)
 		osa_logi("%s: socket listen success. maxCon=%d", func, maxCon);
+#endif
 
 		sockErr = OSA_SOCK_SUCCESS;
 		ret = OSA_SUCCESS;
@@ -510,9 +521,49 @@ ret_e osa_socket :: listen(i32_t maxCon, osa_SockErr_e &sockErr)
 	return ret;
 }
 
-void osa_socket :: setSockFd(int newSockFd)
+
+
+ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_SockErr_e &sockErr)
 {
-	sockFd = newSockFd;
+	char * func = "osa_socket::accept"
+	int newSockFd, result, unixDomain;
+	ret_e ret=OSA_SUCCESS;
+	struct sockaddr sAddr;
+
+	osa_logd("%s: entered.", func);
+
+	newSockFd = accept(sockFd, &sAddr, sizeof(struct sockaddr));
+
+	if(-1 == newSockFd)
+	{
+		osa_loge("%s: socket accept failed. errno=%s (%d)", func, strerror(errno), errno);
+
+		sockErr = o_unix2osaSockErr();
+		ret = OSA_ERR_COREFUNCFAILED;	
+	}
+	else
+	{
+		newStreamSock.setSockFd(newSockFd);
+
+#if (LOGLEVEL >= LOGLVL_INFO)
+		
+		osa_sockAddrIn_t sAddrOsa, rAddrOsa;
+		
+		result = newStreamSock.getSockAddr(sAddrOsa);
+		osa_assert(OSA_SUCCESS == result);
+
+		result = newStreamSock.getSockPeerAddr(rAddrOsa);
+		osa_assert(OSA_SUCCESS == result);
+		
+		osa_logi("%s: socket accept success. Domain=%s, lAddr=%s, lPort=%d, rAddr=%s, rPort=%d", func, 
+			osa_enum2str(sAddrOsa.domain), sAddrOsa.addr, sAddrOsa.port, rAddrOsa.addr, rAddrOsa.port);
+#endif
+
+		sockErr = OSA_SOCK_SUCCESS;
+		ret = OSA_SUCCESS;
+	}
+
+	osa_logd("%s: success. returning", func);
 }
 
 ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_SockErr_e &sockErr)
@@ -530,24 +581,51 @@ ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_SockErr_e &sockErr)
 	{
 		osa_loge("%s: socket accept failed. errno=%s (%d)", func, strerror(errno), errno);
 
-		sockErr = o_unixS2osaSockErr();
+		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAILED;	
 	}
 	else
 	{
 		newStreamSock.setSockFd(newSockFd);
-		
-		osa_sockAddrIn_t sAddrOsa, rAddrOsa;
-		
-		result = newStreamSock.getSockAddr(sAddrOsa);
-		osa_assert(OSA_SUCCESS == result);
 
-		result = newStreamSock.getSockPeerAddr(rAddrOsa);
-		osa_assert(OSA_SUCCESS == result);
-		
-		osa_logi("%s: socket accept success. Domain=%s, lAddr=%s, lPort=%d, rAddr=%s, rPort=%d", func, 
-			osa_enum2str(sAddrOsa.domain), sAddrOsa.addr, sAddrOsa.port, rAddrOsa.addr, rAddrOsa.port);
-		
+#if (LOGLEVEL >= LOGLVL_INFO)
+		osa_sockAddrGeneric_t sAddrOsa;
+		struct sockaddr tmp;
+
+
+		result = getsockname(sockFd, &tmp, sizeof(struct sockaddr));
+
+		switch(tmp.sun_family)
+		{
+			case AF_UNIX:
+			{
+				struct sockaddr_un unixAddr;
+				int cr_len;
+				struct ucred cr;
+				char pidStr[40];
+
+				sAddrOsa.addr = (void *)&unixAddr;
+				sAddrOsa.addrLen = sizeof(sockaddr_un);
+
+				result = newStreamSock.getSockAddr(sAddrOsa);
+				osa_assert(OSA_SUCCESS == result);
+
+				if (getsockopt (newSockFd, SOL_SOCKET, SO_PEERCRED, &cr, &cr_len) == 0 &&
+					cr_len == sizeof (cr))
+				{
+					sprintf(pidStr, ", pid of peer=%d", cr.pid);
+				}
+				else
+				{
+					sprintf(pidStr, ", pid of peer=COULDNT_RETRIEVE");
+				}
+				osa_logi("%s: socket accept success. Domain=%d, socket-path=%s%s", func, unixAddr.sun_family, 
+					unixAddr.sun_path, pidStr);
+			}
+			break;
+		}
+#endif
+
 		sockErr = OSA_SOCK_SUCCESS;
 		ret = OSA_SUCCESS;
 	}
