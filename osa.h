@@ -128,6 +128,16 @@ typedef enum osa_sockErr_e
 	OSA_SOCKERR_IFACEDOWN, 			/* Network interface is down */
 	OSA_SOCKERR_OPNOTSUPP,			/* This operation is not supported on this socket type */
 	OSA_SOCKERR_NOTCONN, 			/* The socket is not connected */
+	OSA_SOCKERR_WRONGDOMAIN,		/* The domain of passed address doesn't match socket domain */
+	OSA_SOCKERR_NOFREELOCALPORT,    /* No free local port available. TO DO: verify (corresponds to EAGAMIN rt nw) */
+	OSA_SOCKERR_EALREADY, 			/* Old connect attempt is already in progress and not yet completed */
+	OSA_SOCKERR_INPROGRESS, 		/* connect proceure has started and in progress. Valid for non-blocking sockets */	
+	OSA_SOCKERR_CONNREFUSED, 		/* Connection refused by other side/server */
+	OSA_SOCKERR_INTERRUPTED, 		/* connect call was interuppted by a signal */
+	OSA_SOCKERR_CONNECTED, 			/* Socket is already in connected state */
+	OSA_SOCKERR_NETUNREACH, 		/* Network is unreachable */
+	OSA_SOCKERR_TIMEDOUT, 			/* connect timed out. */
+	OSA_SOCKERR_FAULTADDR, 			/* Socket address provided doesn't match socket type */
 	OSA_SOCKERR_UNKNOWN,
 
 }osa_sockErr_e;
@@ -270,7 +280,8 @@ public:
 
    IN remoteAddr: Remote socket address (family, address, port). 
 */
-   ret_e connect(osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+   ret_e connect(osa_sockAddrIn_t &remoteAddr, osa_SockErr_e &sockErr);
+   ret_e connect(osa_sockAddrGeneric_t &remoteAddr, osa_SockErr_e &sockErr);
 
 
 /* send	: Send data on a socket. Can be used for a connected (tcp) socket.
