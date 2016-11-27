@@ -1,9 +1,11 @@
 #ifndef __O_S_ABS__
 #define __O_S_ABS__
 
-#ifdef __linux__
+//#ifdef __linux__
+#include <stdio.h>
 #include <cstdint>  /* for cpp;  In case you are using c, the parallel header is stdint.h */
-#endif
+#include <stdlib.h>
+//#endif
 
 #ifdef _WIN32
 
@@ -15,6 +17,11 @@
 #define LOGLVL_DEBUG 	2
 
 #define LOG_LEVEL		LOGLVL_DEBUG
+
+
+#define osa_logd printf;
+#define osa_loge printf;
+#define osa_logi printf;
 
 /****************************************************
 * 		D A T A    T Y P E   W R A P E R S 
@@ -50,8 +57,6 @@ typedef enum
 
 /* Get enum names as character strings. Very useful in debugging huge logs */
 char * osa_enum2Str(ret_e ret);
-char * osa_enum2Str(osa_sockDomain_e domain);
-char * osa_enum2Str(osa_sockType_e type);
 
 /****************************************
 * 		String Processing
@@ -78,8 +83,8 @@ i32_t osa_strncmp(char *s1, char *s2, i32_t n);
 i32_t osa_strcasecmp(char *s1, char *s2); /* Same as osa_strcmp but ignores case while comparing */
 i32_t osa_strncasecmp(char *s1, char *s2, i32_t n); /* Same as osa_strncmp but ignores case while comparing */
 
-i32_t osa_strcat(char *dst, char *src, i32_t dstSz);
-i32_t osa_strncat(char *dst, char *src, i32_t n, i32_t dstSz);
+ret_e osa_strcat(char *dst, char *src, i32_t dstSz);
+ret_e osa_strncat(char *dst, char *src, i32_t n, i32_t dstSz);
 
 char * osa_strchr(char * s1, int c);
 char * osa_index(char *s1, int c);
@@ -101,6 +106,48 @@ void * osa_realloc(void * buf, u32_t sz);						/* Allocates a new buffer of size
 void osa_free(void * buf);										/* Free the buffer */
 
 
+
+/********************************************************
+*					Q U E U E S
+*********************************************************/
+
+/* Queues are important data structures for asynchronous io. When different threads that are waiting on different devices
+   want to communicate, queue is the best data structure. The sender thread can push the data to the queue and receiver
+   thread will read the data from the queue. The Queue API will internally implement mutex based access control so that
+   there is no race condition.
+*/
+
+
+typedef struct q_data_t
+{
+	void *obj;
+	uint32_t size;
+}q_data_t;
+
+class osa_q
+{
+public:
+
+	osa_q();
+	osa_q(uint32_t maxSize);
+
+	ret_e flush();
+
+	/* Push the element to the tail of the queue */
+	ret_e push(q_data_t &obj);
+
+	/* Get the element at the head. Element is removed from the queue */
+	ret_e pop(q_data_t &obj);
+
+	/* Get the top element but don't remove it from the queue */
+	ret_e peek(q_data_t &obj);
+
+	/* returns -1 on error, number of elements in the queue otherwise */
+	i32_t curSize();	
+};
+
+
+
 /****************************************
 	*			S O C K E T S
 *****************************************/
@@ -114,7 +161,7 @@ typedef int32_t  				osa_ioHd_t; 	/** TO DO: int32_t or int ?? **/
 
 typedef enum osa_sockErr_e
 {
-	OSA_SOCK_SUCCESS;
+	OSA_SOCK_SUCCESS,
 	OSA_SOCKERR_ACCESS,				/* Permission denied */
 	OSA_SOCKERR_INVAL, 				/* Invalid parameter or operation */
 	OSA_SOCKERR_UNKNOWNPROTO,		/* Unknown protocol */
@@ -131,14 +178,15 @@ typedef enum osa_sockErr_e
 	OSA_SOCKERR_WRONGDOMAIN,		/* The domain of passed address doesn't match socket domain */
 	OSA_SOCKERR_NOFREELOCALPORT,    /* No free local port available. TO DO: verify (corresponds to EAGAMIN rt nw) */
 	OSA_SOCKERR_EALREADY, 			/* Old connect attempt is already in progress and not yet completed */
-	OSA_SOCKERR_INPROGRESS, 		/* connect proceure has started and in progress. Valid for non-blocking sockets */	
+	OSA_SOCKERR_INPROGRESS, 		/* Operation in progress. e.g. connect proceure has started and in progress. Valid for non-blocking sockets */	
 	OSA_SOCKERR_CONNREFUSED, 		/* Connection refused by other side/server */
 	OSA_SOCKERR_INTERRUPTED, 		/* connect call was interuppted by a signal */
 	OSA_SOCKERR_CONNECTED, 			/* Socket is already in connected state */
 	OSA_SOCKERR_NETUNREACH, 		/* Network is unreachable */
 	OSA_SOCKERR_TIMEDOUT, 			/* connect timed out. */
 	OSA_SOCKERR_FAULTADDR, 			/* Socket address provided doesn't match socket type */
-	OSA_SOCKERR_UNKNOWN,
+	OSA_SOCKERR_NODESTSET,			/* Remote address not set on socket */
+	OSA_SOCKERR_UNKNOWN
 
 }osa_sockErr_e;
 
@@ -161,6 +209,10 @@ typedef enum
 	OSA_SOCK_SEQPACKET,
 	OSA_SOCK_RAW,
 }osa_sockType_e;
+
+char * osa_enum2Str(osa_sockDomain_e domain);
+char * osa_enum2Str(osa_sockType_e type);
+
 
 /* osa_sockAddrIn_t: Structure to hold IP socket address.
 	addr : This is plaintext ip address (as character string e.g. "100.1.2.3").
@@ -187,8 +239,10 @@ typedef struct osa_sockAddrGeneric_t
 	osa_sockDomain_e domain;
 	void *			 addr;
 	u32_t 			 addrLen;
-}
+}osa_sockAddrGeneric_t;
 
+
+class osa_socket;
 
 /* osa_sendCompleteCb : Send complete indication callback for non-blocking (asynchronous) io send (e.g. socket send).
 					 This function will be called by osa-lib after data is sent on fd. User can do any post-processing
@@ -198,7 +252,7 @@ typedef struct osa_sockAddrGeneric_t
    IN appData	   : Caller provided pointer. This could point to a structure/buffer in caller  memory.
 				     Caller can deference and use it in this callback function.
 */
-void (*osa_sendCompleteCb)(osa_socket &sock, void * appData);
+typedef void (*osa_sendCompleteCb)(osa_socket &sock, void * appData);
 
 
 /* recvReadyCb    : Recv ready indication callback for non-blocking io recv (e.g. socket recv). 
@@ -210,7 +264,7 @@ void (*osa_sendCompleteCb)(osa_socket &sock, void * appData);
    IN appData	  : Caller provided pointer. This could point to a structure/buffer in caller  memory.
 				    Caller can deference and use it in this callback function.
 */
-void (*osa_recvReadyCb)(osa_socket &sock, void * appData);
+typedef void (*osa_recvReadyCb)(osa_socket &sock, void * appData);
 
 
 class osa_socket
@@ -228,7 +282,7 @@ public:
 	IN protocol :: Normally it should be set to 0 (zero). Others need advance knowledge.
 	OUT sockErr :: Socket specific error
 */
-	ret_e create(osa_sockDomain_e domain, osa_sockType_e type, i32_t protocol, osa_SockErr_e &sockErr);
+	ret_e create(osa_sockDomain_e domain, osa_sockType_e type, i32_t protocol, osa_sockErr_e &sockErr);
 
 /* Set the socket for asynchronous io. Refer Asynchronous IO section for details */
 	ret_e makeASynchronous(osa_sendCompleteCb sendCompleteCb, osa_recvReadyCb recvReadyCb, void * appData);
@@ -241,14 +295,14 @@ public:
 				  Address and port and converted to appropriate formats internally based on the domain
 				  parameter.
 */
-	ret_e bind(osa_sockAddrIn_t &addr, osa_SockErr_e &sockErr);
+	ret_e bind(osa_sockAddrIn_t &addr, osa_sockErr_e &sockErr);
 
 /* bind		: Bind an address to the empty socket.
 
 	IN addr 	: This provides Domain and address. Address is internall typecasted to specific structure
 				  based on domain				  
 */
-	ret_e bind(osa_sockAddrGeneric_t &addr, osa_SockErr_e &sockErr);
+	ret_e bind(osa_sockAddrGeneric_t &addr, osa_sockErr_e &sockErr);
 
 
 /* listen	: Start listening for new connections. This tells the operating systems that we are now ready to accept
@@ -260,28 +314,28 @@ public:
 	IN maxCon	: Maximum number of simultanuous connections allowed. This will determine the maximum number of clients
 				  that can connect to this server.
 */
-	ret_e listen(i32_t maxCon, osa_SockErr_e &sockErr);
+	ret_e listen(i32_t maxCon, osa_sockErr_e &sockErr);
 
 
 /* accept	: Accept a new connection. Only valid for TCP sockets (SOCK_STREAM/SEQPACKET).
 				  If the socket is marked as asynchronous, this function should be called in osa_recvReadyCb() callback.
 
-   IN remoteAddr: Remote address and port.
+   IN rAddr: Remote address and port.
 
    TO DO: Find out what is the remote address in case of unix domain stream socket!!!
 */
-   ret_e accept(osa_socket &newStreamSock, osa_SockErr_e &sockErr);
+   ret_e accept(osa_socket &newStreamSock, osa_sockErr_e &sockErr);
 
 /* connect	: Connect to a remote socket. If 'socket' is a TCP socket, then this call attempts to establish a tcp 
-				  	  connection with remote server (with address remoteAddr). 
-				  	  If its a UDP socket, this call tells the operating system that only packets from remoteAddr will/should 
+				  	  connection with remote server (with address rAddr). 
+				  	  If its a UDP socket, this call tells the operating system that only packets from rAddr will/should 
 				  	  be accepted. Packets coming from any other address will be rejected by OS and will not be delivered to 
 				  	  this process.
 
-   IN remoteAddr: Remote socket address (family, address, port). 
+   IN rAddr: Remote socket address (family, address, port). 
 */
-   ret_e connect(osa_sockAddrIn_t &remoteAddr, osa_SockErr_e &sockErr);
-   ret_e connect(osa_sockAddrGeneric_t &remoteAddr, osa_SockErr_e &sockErr);
+   ret_e connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr);
+   ret_e connect(osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr);
 
 
 /* send	: Send data on a socket. Can be used for a connected (tcp) socket.
@@ -293,10 +347,10 @@ public:
 	IN flags 		: Flags control certain aspects of send operation. It is bitwise OR of the values to be given.
 						e.g. MSG_DONTROUTE, MSG_OOB. (Flags may change depending on the platform/OS being used)
 */
-	ret_e send(void * buf, i32_t len, i32_t flags, osa_SockErr_e &sockErr);
+	ret_e send(void *buf, i32_t len, i32_t flags, osa_sockErr_e &sockErr);
 
 
-/* sendto	: Send data on a socket. Can be used for a datagram (udp) socket (as well as tcp. For TCP, remoteAddr
+/* sendto	: Send data on a socket. Can be used for a datagram (udp) socket (as well as tcp. For TCP, rAddr
 					  should be empty). If socket has been configured for asynchronous io (with osa_io_makeASynchronous), 
 					  this data will be added to an internal queue and once that is sent out, sendCompleteCb() will be called.
 
@@ -305,7 +359,8 @@ public:
 	IN flags 		: Flags control certain aspects of send operation. It is bitwise OR of the values to be given.
 						e.g. MSG_DONTROUTE, MSG_OOB. (Flags may change depending on the platform/OS being used)
 */
-	ret_e sendto(void * buf, i32_t len, i32_t flags, osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+	ret_e sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr);
+	ret_e sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr);
 
 
 /* recv 	: Receive data from socket. Can be used with connected (tcp) sockets.
@@ -317,7 +372,7 @@ public:
 	OUT bytesRead 	: Actual number of bytes copied in 'buf' by OS
 	IN  flags 		: e.g. PEEK : This returns the length of available data. You can increase the buffer size if 
 */
-	ret_e recv(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, osa_SockErr_e &sockErr);
+	ret_e recv(void *buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, osa_sockErr_e &sockErr);
 
 
 /* recvfrom: Receive data from socket. Can be used with connected and datagram (tcp/udp) sockets.
@@ -328,19 +383,31 @@ public:
 	IN  bufSize 	: size of the buffer 'buf'
 	OUT bytesRead 	: Actual number of bytes copied in 'buf' by OS
 	IN  flags 		: e.g. MSG_PEEK //TO DO: Add enum
-	OUT remoteAddr	: Remote socket details (address, port)
+	OUT rAddr	: Remote socket details (address, port)
 */
 	ret_e recvfrom(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, 
-		osa_sockAddr_t &remoteAddr, osa_SockErr_e &sockErr);
+		osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr);
+	
+	ret_e recvfrom(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, 
+		osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr);
 
+
+	ret_e getSockAddr(osa_sockAddrIn_t &sAddrOsa);
+
+	ret_e getsockPeerAddr(osa_sockAddrIn_t &peerAddrOsa);
 
 /* destroy 	: Close the socket. This call closes the socket and frees the socket context inside kernel */
 	ret_e destroy();
 
 private:
 	int sockFd;
+	int isAsync;
+	osa_q sockQ;
 
+	void setSockFd(int newSockFd);
 };
+
+
 
 
 /* TO DO :socketpair */
@@ -388,8 +455,9 @@ ret_e osa_io_makeASynchronous(osa_ioHd_t fd, osa_sendCompleteCb sendCompleteCb, 
 typedef FILE  				osa_fileHd_t;
 #endif
 
-typedef osa_fileErr_e
-{}osa_fileErr_e;
+typedef struct osa_fileErr_e
+{
+}osa_fileErr_e;
 
 /* File opening modes. "Read-Write" mode is deliberately avoided as the behavior is confusing/not intuitive.
    If you want to do both the operations on the file, you should open it twice in different modes */
@@ -487,10 +555,10 @@ typedef void *	osa_threadHd_t;
 						 be executed in the new thread.
 						 When this function returns, the thread ends (just like your program ends when you return from main())
 */
-void * (*ThreadFunc)(void *);
+typedef void * (*ThreadFunc)(void *);
 
 /* Check #Thread Termination and osa_thread_cleanup_push() for details */
-void (*CleanupCb) (void *arg);
+typedef void (*CleanupCb) (void *arg);
 
 typedef enum osa_thread_priority_e
 {
@@ -693,7 +761,7 @@ ret_e osa_cond_wait(osa_cond_t &c, osa_mutex_t &m);
 					   If multiple threads are waiting, only one thread will be chosen based on scheduling policy and woken up.
 	IN c 			 : conditional variable to be signaled.
 */
-ret_e osa_cond_signal(osa_cont_t &c);
+ret_e osa_cond_signal(osa_cond_t &c);
 
 /* osa_cond_broadcast() : Signal/wake-up all the waiting threads.
 					   All threads will be woken up. All will try to get a lock (internally). One by one, as threads complete
@@ -703,37 +771,8 @@ ret_e osa_cond_broadcast(osa_cond_t &c);
 
 
 
-/********************************************************
-*					Q U E U E S
-*********************************************************/
 
-/* Queues are important data structures for asynchronous io. When different threads that are waiting on different devices
-   want to communicate, queue is the best data structure. The sender thread can push the data to the queue and receiver
-   thread will read the data from the queue. The Queue API will internally implement mutex based access control so that
-   there is no race condition.
-*/
 
-typedef void *	osa_q_t;
-
-typedef struct q_data_t
-{
-	void *obj;
-	uint32_t size;
-}q_data_t;
-
-ret_e osa_q_create(osa_q_t &q, uint32_t maxSize);
-
-ret_e osa_q_destroy(osa_q_t &q);
-
-ret_e osa_q_flush(osa_q_t &q);
-
-ret_e osa_q_push(osa_q_t &q, q_data_t &data);
-
-ret_e osa_q_pop(osa_q_t &q, q_data_t &data);
-
-ret_e osa_q_peek(osa_q_t &q, q_data_t &data);
-
-ret_e osa_q_curSize(osa_q_t &q, uint32_t &curSize);
 
 
 

@@ -6,7 +6,7 @@ ret_e osa_strlen(char * str, u32_t &len)
 	char * func = "osa_strlen";
 	if(NULL == str)
 	{
-		osa_log_error("%s: Input string is NULL", func);
+		osa_loge("%s: Input string is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
@@ -23,20 +23,20 @@ ret_e osa_strcpy(char *dst, char * src, i32_t dstSz)
 
 	if(NULL == dst)
 	{
-		osa_log_error("%s:err:Destination Buffer is NULL", func);
+		osa_loge("%s:err:Destination Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
 	if(NULL == src)
 	{
-		osa_log_error("%s:err:Source Buffer is NULL", func);
+		osa_loge("%s:err:Source Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
 	srcLen = strlen(src);
 	if(srcLen > dstSz-1)
 	{
-		osa_log_warning("%s:warning: dest buffer (%d) is smaller than src string (%d). Only %d bytes will be copied", 
+		osa_logd("%s:warning: dest buffer (%d) is smaller than src string (%d). Only %d bytes will be copied", 
 					func, dstSz, srcLen, dstSz-1);
 	}
 
@@ -46,7 +46,7 @@ ret_e osa_strcpy(char *dst, char * src, i32_t dstSz)
 }
 
 /* copy n bytes from src to dst. Max(dstSz-1) bytes will be copied */
-i32_t osa_strncpy(char * dst, char *src, i32_t n, i32_t dstSz); 
+ret_e osa_strncpy(char * dst, char *src, i32_t n, i32_t dstSz)
 {
 	char * func = "osa_strncpy";
 	i32_t srcLen=0;
@@ -55,26 +55,26 @@ i32_t osa_strncpy(char * dst, char *src, i32_t n, i32_t dstSz);
 	  ############## */
 	if(NULL == dst)
 	{
-		osa_log_error("%s:err:Destination Buffer is NULL", func);
+		osa_loge("%s:err:Destination Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
 	if(NULL == src)
 	{
-		osa_log_error("%s:err:Source Buffer is NULL", func);
+		osa_loge("%s:err:Source Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
 	srcLen = strlen(src);
 	if(n > srcLen)
 	{
-		osa_log_error("%s:err:n (%d) is greater than src len (%d)", func, n, srcLen);
+		osa_loge("%s:err:n (%d) is greater than src len (%d)", func, n, srcLen);
 		return OSA_ERR_BADPARAM;
 	}
 
 	if(n > dstSz-1)
 	{
-		osa_log_warning("%s:warning: dest buffer (%d) is smaller than n (%d). Only %d bytes will be copied", dstSz, n, dstSz-1);
+		osa_logd("%s:warning: dest buffer (%d) is smaller than n (%d). Only %d bytes will be copied", dstSz, n, dstSz-1);
 	}
 	/*##############
 	  ############## */
@@ -129,19 +129,20 @@ i32_t osa_strncasecmp(char *s1, char *s2, i32_t n)
 
 ret_e osa_strcat(char *dst, char *src, i32_t dstSz)
 {
+	char * func = "osa_strcat";
 	i32_t srcLen=0, dstLen=0;
 
 	/*##############
 	  ############## */
 	if(NULL == dst)
 	{
-		osa_log_error("%s:err:Destination Buffer is NULL", func);
+		osa_loge("%s:err:Destination Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
 	if(NULL == src)
 	{
-		osa_log_error("%s:err:Source Buffer is NULL", func);
+		osa_loge("%s:err:Source Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 	
@@ -150,8 +151,8 @@ ret_e osa_strcat(char *dst, char *src, i32_t dstSz)
 
 	if(srcLen+dstLen+1 > dstSz)
 	{
-		osa_log_error("%s:err:The concanated string is bigger (%d) than dstSz (%d)", func, srcLen+dstLen+1, dstSz);
-		return OSA_ERR_INSUFFICIENTMEMORY;
+		osa_loge("%s:err:The concanated string is bigger (%d) than dstSz (%d)", func, srcLen+dstLen+1, dstSz);
+		return OSA_ERR_INSUFFMEM;
 	}
 	/*##############
 	  ############## */
@@ -163,27 +164,27 @@ ret_e osa_strcat(char *dst, char *src, i32_t dstSz)
 
 ret_e osa_strncat(char *dst, char *src, i32_t n, i32_t dstSz)
 {
-	i32_t srcLen=0, dstLen=0;
 	char * func = "osa_strncat";
-
+	i32_t srcLen=0, dstLen=0;
+	
 	/*##############
 	  ############## */
 	if(NULL == dst)
 	{
-		osa_log_error("%s:err:Destination Buffer is NULL", func);
+		osa_loge("%s:err:Destination Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 
 	if(NULL == src)
 	{
-		osa_log_error("%s:err:Source Buffer is NULL", func);
+		osa_loge("%s:err:Source Buffer is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
 	
 	srcLen = strlen(src);
 	if(n > srcLen)
 	{
-		osa_log_error("%s:err:n (%d) is greater than src len (%d)", func, n, srcLen);
+		osa_loge("%s:err:n (%d) is greater than src len (%d)", func, n, srcLen);
 		return OSA_ERR_BADPARAM;
 	}
 
@@ -191,8 +192,8 @@ ret_e osa_strncat(char *dst, char *src, i32_t n, i32_t dstSz)
 
 	if(n+dstLen+1 > dstSz)
 	{
-		osa_log_error("%s:err:The concanated string is bigger (%d) than dstSz (%d)", func, n+dstLen+1, dstSz);
-		return OSA_ERR_INSUFFICIENTMEMORY;
+		osa_loge("%s:err:The concanated string is bigger (%d) than dstSz (%d)", func, n+dstLen+1, dstSz);
+		return OSA_ERR_INSUFFMEM;
 	}
 	/*##############
 	  ############## */
@@ -210,7 +211,7 @@ char * osa_strchr(char * s1, int c)
 	  ############## */
 	if(NULL == s1)
 	{
-		osa_log_error("%s:err:String is NULL", func);
+		osa_loge("%s:err:String is NULL", func);
 		return NULL;
 	}
 	/*##############
@@ -228,7 +229,7 @@ char * osa_index(char *s1, int c)
 	  ############## */
 	if(NULL == s1)
 	{
-		osa_log_error("%s:err:String is NULL", func);
+		osa_loge("%s:err:String is NULL", func);
 		return NULL;
 	}
 	/*##############
@@ -244,18 +245,17 @@ char * osa_strstr(char * haystack, char * needle)
 	  ############## */
 	if(NULL == haystack)
 	{
-		osa_log_error("%s:err:haystack is NULL", func);
+		osa_loge("%s:err:haystack is NULL", func);
 		return NULL;
 	}
 
 	if(NULL == needle)
 	{
-		osa_log_error("%s:err:needle is NULL", func);
+		osa_loge("%s:err:needle is NULL", func);
 		return NULL;
 	}
 	/*##############
 	  ############## */
 
 	return strstr(haystack, needle);
-
 }
