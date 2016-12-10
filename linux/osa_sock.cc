@@ -8,7 +8,7 @@
 #include <string.h>
 #include <sys/un.h>
 #include <assert.h>
-
+#include <unistd.h>
 #include <netpacket/packet.h>
 #include <net/ethernet.h> /* the L2 protocols */
 
@@ -302,7 +302,7 @@ ret_e osa_socket::create(osa_sockDomain_e domain, osa_sockType_e type, i32_t pro
 	else
 	{
 #if (LOGLEVEL >= LOGLVL_INFO)
-		osa_logi("%s: socket created successfully. Domain=%s, Type=%s, Proto=%d", func, 
+		osa_logi("%s: socket created successfully. sockFd=%d, Domain=%s, Type=%s, Proto=%d", func, sockFd, 
 			osa_enum2str(domain), osa_enum2str(type), proto);
 #endif
 
@@ -310,7 +310,7 @@ ret_e osa_socket::create(osa_sockDomain_e domain, osa_sockType_e type, i32_t pro
 		ret = OSA_SUCCESS;
 	}
 
-	osa_logd("%s: success. returning", func);
+	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
 }
 
 
@@ -324,12 +324,12 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 	
 	/*--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--
 	--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--*/
-	osa_logd("%s: entered. sockAddr.domain=%s, sockAddr.addr=%s, sockAddr.port=%d", func, osa_enum2str(sockAddr.domain), 
+	osa_logd("%s: entered. sockFd=%d, sockAddr.domain=%s, sockAddr.addr=%s, sockAddr.port=%d", func, sockFd, osa_enum2str(sockAddr.domain), 
 		sockAddr.addr, sockAddr.port);
 
 	if (OSA_AF_INET != sockAddr.domain && OSA_AF_INET6 != sockAddr.domain)
 	{
-		osa_loge("%s:error: Wrong domain provided: %d. Use this API for IPv4 and IPv6 only. returning", func, sockAddr.domain);
+		osa_loge("%s: sockFd=%d, error: Wrong domain provided: %d. Use this API for IPv4 and IPv6 only. returning", func, sockFd, sockAddr.domain);
 		return OSA_ERR_BADPARAM;
 	}
 	/*--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--
@@ -345,7 +345,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 
 			if(1 != result)
 			{
-				osa_loge("%s:error: Invalid IP address:%s. inet_pton returned %d. returning", func, sockAddr.addr, result);
+				osa_loge("%s: sockFd=%d, error: Invalid IP address:%s. inet_pton returned %d. returning", func, sockFd, sockAddr.addr, result);
 				return OSA_ERR_BADPARAM;
 			}
 
@@ -353,8 +353,8 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 
 			if(0 != result)
 			{
-				osa_loge("%s:error: socket bind failed. Addr.domain=%s, Addr.ip=%s, Addr.port=%d, errno=%s (%d). Returning", func,
-					osa_enum2str(sockAddr.domain), sockAddr.addr, sockAddr.port, strerror(errno), errno);
+				osa_loge("%s:error: socket bind failed. sockFd=%d, Addr.domain=%s, Addr.ip=%s, Addr.port=%d, errno=%s (%d). Returning", func,
+					 sockFd, osa_enum2str(sockAddr.domain), sockAddr.addr, sockAddr.port, strerror(errno), errno);
 
 				sockErr = o_unix2osaSockErr();
 				ret = OSA_ERR_COREFUNCFAIL;
@@ -362,7 +362,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 			else
 			{
 #if (LOGLEVEL >= LOGLVL_INFO)
-				osa_logi("%s: socket bind success. Addr.domain=%s, Addr.ip=%s, Addr.port=%d", func,
+				osa_logi("%s: socket bind success. sockFd=%d, Addr.domain=%s, Addr.ip=%s, Addr.port=%d", func, sockFd,
 					osa_enum2str(sockAddr.domain), sAddr.addr, sAddr,port);
 #endif
 
@@ -376,7 +376,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 			result = o_osa2unixStruct(sockAddr, sAddr);
 			if(1 != result)
 			{
-				osa_loge("%s:error: Invalid IP address:%s. inet_pton returned %d. returning", func, sockAddr.addr, result);
+				osa_loge("%s:error: sockFd=%d, Invalid IP address:%s. inet_pton returned %d. returning", func, sockFd, sockAddr.addr, result);
 				return OSA_ERR_BADPARAM;
 			}
 
@@ -385,8 +385,8 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 
 			if(0 != result)
 			{
-				osa_loge("%s:error: socket bind failed. Addr.domain=%s, Addr.ip=%s, Addr.port=%d, errno=%s (%d). returning", 
-					func, osa_enum2str(sockAddr.domain), sockAddr.addr, sockAddr.port, strerror(errno), errno);
+				osa_loge("%s:error: socket bind failed. sockFd=%d, Addr.domain=%s, Addr.ip=%s, Addr.port=%d, errno=%s (%d). returning", 
+					func, sockFd, osa_enum2str(sockAddr.domain), sockAddr.addr, sockAddr.port, strerror(errno), errno);
 
 				sockErr = o_unix2osaSockErr();
 				ret = OSA_ERR_COREFUNCFAIL;
@@ -394,8 +394,8 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 			else
 			{
 #if (LOGLEVEL >= LOGLVL_INFO)
-				osa_logi("%s: socket bind success. Addr.domain=%s, Addr.ip=%s, Addr.port=%d", 
-					func, osa_enum2str(sockAddr.domain), sAddr6.addr, sAddr6,port);
+				osa_logi("%s: socket bind success. sockFd=%d, Addr.domain=%s, Addr.ip=%s, Addr.port=%d", 
+					func, sockFd, osa_enum2str(sockAddr.domain), sAddr6.addr, sAddr6,port);
 #endif
 
 				sockErr = OSA_SOCK_SUCCESS;
@@ -405,7 +405,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 		break;
 	}
 
-	osa_logd("%s: success. returning", func);
+	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
 
 	return ret;
 }
@@ -421,17 +421,17 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 	
 	/*--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--
 	--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--*/
-	osa_logd("%s: entered. sockAddr.domain=%s, sockAddr.addrLen=%d", func, osa_enum2str(sockAddr.domain), sockAddr.addrLen);
+	osa_logd("%s: entered. sockFd=%d, sockAddr.domain=%s, sockAddr.addrLen=%d", func, sockFd, osa_enum2str(sockAddr.domain), sockAddr.addrLen);
 
 	if (OSA_AF_UNIX != sockAddr.domain && OSA_AF_NETLINK != sockAddr.domain && OSA_AF_PACKET != sockAddr.domain)
 	{
-		osa_loge("%s:error: Wrong domain provided: %d. Use the API for UNIX|NETLINK|PACKET domain. Returning", func, sockAddr.domain);
+		osa_loge("%s: sockFd=%d, error: Wrong domain provided: %d. Use the API for UNIX|NETLINK|PACKET domain. Returning", func, sockFd, sockAddr.domain);
 		return OSA_ERR_BADPARAM;
 	}
 
 	if(NULL == sockAddr.addr || 0 == sockAddr.addrLen)
 	{
-		osa_loge("%s:error: Bad input parameters. addr=%x, addrLen=%d", func, sockAddr.addr, sockAddr.addrLen);
+		osa_loge("%s: sockFd=%d, error: Bad input parameters. addr=%x, addrLen=%d", func, sockFd, sockAddr.addr, sockAddr.addrLen);
 	}
 	/*--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--
 	--*----*----*----*----*----*----*----*----*----*----*----*----*----*----*----*--*/
@@ -444,7 +444,7 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 		{
 			if(sizeof(struct sockaddr_un) != sockAddr.addrLen)
 			{
-				osa_loge("%s:error: struct sockaddr_un expected as addr with len=%d, But addrLen=%d. returning", func, 
+				osa_loge("%s:error: sockFd=%d, struct sockaddr_un expected as addr with len=%d, But addrLen=%d. returning", func,  sockFd,
 					sizeof(struct sockaddr_un), sockAddr.addrLen);
 				return OSA_ERR_BADPARAM;
 			}
@@ -454,7 +454,7 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 
 			if(0 != result)
 			{
-				osa_loge("%s:error: socket bind failed. Addr.domain=%s, socket-path=%s, errno=%s (%d)", func,
+				osa_loge("%s:error: socket bind failed. sockFd=%d, Addr.domain=%s, socket-path=%s, errno=%s (%d)", func, sockFd,
 					osa_enum2str(sockAddr.domain), sAddrUn->sun_path, strerror(errno), errno);
 
 				sockErr = o_unix2osaSockErr();
@@ -463,7 +463,7 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 			else
 			{
 #if (LOGLEVEL >= LOGLVL_INFO)
-				osa_logi("%s: socket bind success. Addr.domain=%s, socket-path=%s", func,
+				osa_logi("%s: socket bind success. sockFd=%d, Addr.domain=%s, socket-path=%s", func, sockFd,
 					osa_enum2str(sockAddr.domain), sAddrun.sun_path);
 #endif
 
@@ -476,7 +476,7 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 		{
 			if(sizeof(struct sockaddr_ll) != sockAddr.addrLen)
 			{
-				osa_loge("%s:error: struct sockaddr_ll expected as addr with len=%d, But addrLen=%d. returning", func, 
+				osa_loge("%s:error: sockFd=%d, struct sockaddr_ll expected as addr with len=%d, But addrLen=%d. returning", func, sockFd,
 					sizeof(struct sockaddr_un), sockAddr.addrLen);
 				return OSA_ERR_BADPARAM;
 			}
@@ -487,8 +487,8 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 			if(0 != result)
 			{
 				unsigned char *t = sAddrPkt->sll_addr;
-				osa_loge("%s:error: socket bind failed. Addr.domain=%s, proto=%d (in networkByteOrder:%d), ifIndex=%d,\
-					hatype=%d, pktType=%d, halen=%d, addr=%x:%x:%x:%x:%x:%x:%x:%x, errno=%s (%d)", 
+				osa_loge("%s:error: sockFd=%d, socket bind failed. Addr.domain=%s, proto=%d (in networkByteOrder:%d), ifIndex=%d,\
+					hatype=%d, pktType=%d, halen=%d, addr=%x:%x:%x:%x:%x:%x:%x:%x, errno=%s (%d)", func, sockFd,
 					osa_enum2str(sockAddr.domain), ntohs(sAddrPkt->sll_protocol), sAddrPkt->sll_protocol, 
 					sAddrPkt->sll_ifindex, sAddrPkt->sll_hatype, sAddrPkt->sll_pkttype, sAddrPkt->sll_halen,
 					t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7],
@@ -500,8 +500,8 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 			else
 			{
 #if (LOGLEVEL >= LOGLVL_INFO)
-				osa_logi("%s: socket bind success. Addr.domain=%s, proto=%d (in networkByteOrder:%d), ifIndex=%d,\
-					hatype=%d, pktType=%d, halen=%d, addr=%x:%x:%x:%x:%x:%x:%x:%x", 
+				osa_logi("%s: socket bind success. sockFd=%d, Addr.domain=%s, proto=%d (in networkByteOrder:%d), ifIndex=%d,\
+					hatype=%d, pktType=%d, halen=%d, addr=%x:%x:%x:%x:%x:%x:%x:%x", func, sockFd,
 					osa_enum2str(sockAddr.domain), ntohs(sAddrPkt->sll_protocol), sAddrPkt->sll_protocol, 
 					sAddrPkt->sll_ifindex, sAddrPkt->sll_hatype, sAddrPkt->sll_pkttype, sAddrPkt->sll_halen,
 					t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7]);
@@ -514,7 +514,7 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 		break;
 	}
 
-	osa_logd("%s: success. returning", func);
+	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
 
 	return ret;
 }
@@ -526,12 +526,12 @@ ret_e osa_socket :: listen(i32_t maxCon, osa_sockErr_e &sockErr)
 	int result;
 	ret_e ret=OSA_SUCCESS;
 
-	osa_logd("%s: entered. maxCon=%d", func, maxCon);
+	osa_logd("%s: entered. sockFd=%d, maxCon=%d", func, sockFd, maxCon);
 	result = ::listen(sockFd, maxCon);
 
 	if(0 != result)
 	{
-		osa_loge("%s:error: socket listen failed. maxCon=%d, errno=%s (%d)", func, maxCon, strerror(errno), errno);
+		osa_loge("%s:error: socket listen failed. sockFd=%d, maxCon=%d, errno=%s (%d)", func, sockFd, maxCon, strerror(errno), errno);
 
 		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAIL;
@@ -539,14 +539,14 @@ ret_e osa_socket :: listen(i32_t maxCon, osa_sockErr_e &sockErr)
 	else
 	{
 #if (LOGLEVEL >= LOGLVL_INFO)
-		osa_logi("%s: socket listen success. maxCon=%d", func, maxCon);
+		osa_logi("%s: socket listen success. sockFd=%d, maxCon=%d", func, sockFd, maxCon);
 #endif
 
 		sockErr = OSA_SOCK_SUCCESS;
 		ret = OSA_SUCCESS;
 	}
 	
-	osa_logd("%s: success. returning", func);
+	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
 	return ret;
 }
 
@@ -560,13 +560,13 @@ ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_sockErr_e &sockErr)
 	socklen_t sockLen=0;
 	struct sockaddr sAddr;
 
-	osa_logd("%s: entered.", func);
+	osa_logd("%s: entered, sockFd=%d", func, sockFd);
 
 	newSockFd = ::accept(sockFd, &sAddr, &sockLen);
 
 	if(-1 == newSockFd)
 	{
-		osa_loge("%s:error: socket accept failed. errno=%s (%d)", func, strerror(errno), errno);
+		osa_loge("%s:error: sockFd=%d, socket accept failed. errno=%s (%d)", func, sockFd, strerror(errno), errno);
 
 		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAIL;	
@@ -601,7 +601,7 @@ ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_sockErr_e &sockErr)
 				else
 					sprintf(pidStr, ", pid of peer=COULDNT_RETRIEVE");
 
-				osa_logi("%s: socket accept success. Domain=%d, socket-path=%s%s", func, unixAddr.sun_family, 
+				osa_logi("%s: sockFd=%d, socket accept success. Domain=%d, socket-path=%s%s", func, sockFd, unixAddr.sun_family, 
 					unixAddr.sun_path, pidStr);
 			}
 			break;
@@ -616,7 +616,7 @@ ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_sockErr_e &sockErr)
 				result = newStreamSock.getSockPeerAddr(rAddrOsa);
 				osa_assert(OSA_SUCCESS == result);
 
-				osa_logi("%s: socket accept success. Domain=%s, lAddr=%s, lPort=%d, rAddr=%s, rPort=%d", func, 
+				osa_logi("%s: sockFd=%d, socket accept success. Domain=%s, lAddr=%s, lPort=%d, rAddr=%s, rPort=%d", func, sockFd, 
 					osa_enum2str(sAddrOsa.domain), sAddrOsa.addr, sAddrOsa.port, rAddrOsa.addr, rAddrOsa.port);			
 			}
 			break;
@@ -627,7 +627,7 @@ ret_e osa_socket :: accept(osa_socket &newStreamSock, osa_sockErr_e &sockErr)
 		ret = OSA_SUCCESS;
 	}
 
-	osa_logd("%s: success. returning", func);
+	osa_logd("%s: sockFd=%d, success. returning", func, sockFd);
 }
 
 ret_e osa_socket :: connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
@@ -637,7 +637,7 @@ ret_e osa_socket :: connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
 	ret_e ret=OSA_SUCCESS;
 	struct sockaddr sAddr;
 
-	osa_logd("%s: entered. rAddr.domain=%s, rAddr.addr=%s, rAddr.port=%d", func, osa_enum2str(rAddr.domain), 
+	osa_logd("%s: entered. sockFd=%d, rAddr.domain=%s, rAddr.addr=%s, rAddr.port=%d", func, sockFd, osa_enum2str(rAddr.domain), 
 		rAddr.addr, rAddr.port);
 
 	switch(rAddr.domain)
@@ -649,7 +649,7 @@ ret_e osa_socket :: connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
 			result = o_osa2unixStruct(rAddr, rAddrIn);
 			if(1 != result)
 			{
-				osa_loge("%s:error: Invalid remote IP address:%s. inet_pton returned %d. returning", func, rAddr.addr, result);
+				osa_loge("%s:error: sockFd=%d, Invalid remote IP address:%s. inet_pton returned %d. returning", func, sockFd, rAddr.addr, result);
 				return OSA_ERR_BADPARAM;
 			}
 
@@ -664,7 +664,7 @@ ret_e osa_socket :: connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
 			result = o_osa2unixStruct(rAddr, rAddrIn6);
 			if(1 != result)
 			{
-				osa_loge("%s:error: Invalid remote IP address:%s. inet_pton returned %d. returning", func, rAddr.addr, result);
+				osa_loge("%s:error: sockFd=%d, Invalid remote IP address:%s. inet_pton returned %d. returning", func, sockFd, rAddr.addr, result);
 				return OSA_ERR_BADPARAM;
 			}
 
@@ -675,7 +675,7 @@ ret_e osa_socket :: connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
 
 	if(-1 == result)
 	{
-		osa_loge("%s:error: socket connect failed. errno=%s (%d). returning", func, strerror(errno), errno);
+		osa_loge("%s:error: sockFd=%d, socket connect failed. errno=%s (%d). returning", func, sockFd, strerror(errno), errno);
 
 		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAIL;	
@@ -684,7 +684,7 @@ ret_e osa_socket :: connect(osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
 
 	sockErr = OSA_SOCK_SUCCESS;
 	ret = OSA_SUCCESS;
-	osa_logd("%s: socket connect successful. returning", func);	
+	osa_logd("%s: sockFd=%d, socket connect successful. returning", func, sockFd);	
 
 	return ret;
 }
@@ -697,7 +697,7 @@ ret_e osa_socket :: connect(osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr
 	ret_e ret=OSA_SUCCESS;
 	struct sockaddr sAddr;
 
-	osa_logd("%s: entered. rAddr.domain=%s, rAddr.addrLen=%d", func, osa_enum2str(rAddr.domain), rAddr.addrLen);
+	osa_logd("%s: entered. sockFd=%d, rAddr.domain=%s, rAddr.addrLen=%d", func, sockFd, osa_enum2str(rAddr.domain), rAddr.addrLen);
 
 	switch(rAddr.domain)
 	{
@@ -707,8 +707,8 @@ ret_e osa_socket :: connect(osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr
 
 			if(0 == rAddr.addrLen || NULL == rAddr.addr)
 			{
-				osa_loge("%s:error: unix domain expects sockaddr_un(len=%d). Instead passed addr is %d, len=%d. returning", func, 
-					sizeof(struct sockaddr_un), rAddr.addr, result);
+				osa_loge("%s:error: sockFd=%d, sockaddr_un(len=%d) expected. Instead passed addr is %d, len=%d. returning", func, 
+					 sockFd, sizeof(struct sockaddr_un), rAddr.addr, rAddr.addrLen);
 				return OSA_ERR_BADPARAM;
 			}
 
@@ -719,7 +719,7 @@ ret_e osa_socket :: connect(osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr
 
 	if(-1 == result)
 	{
-		osa_loge("%s:error: socket connect failed. errno=%s (%d). returning", func, strerror(errno), errno);
+		osa_loge("%s:error: sockFd=%d, socket connect failed. errno=%s (%d). returning", func, sockFd, strerror(errno), errno);
 
 		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAIL;	
@@ -728,7 +728,7 @@ ret_e osa_socket :: connect(osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr
 
 	sockErr = OSA_SOCK_SUCCESS;
 	ret = OSA_SUCCESS;
-	osa_logd("%s: socket connect successful. returning", func);	
+	osa_logd("%s: sockFd=%d, socket connect successful. returning", func, sockFd);	
 }
 
 ret_e osa_socket :: send(void * buf, i32_t len, i32_t flags, osa_sockErr_e &sockErr)
@@ -739,11 +739,11 @@ ret_e osa_socket :: send(void * buf, i32_t len, i32_t flags, osa_sockErr_e &sock
 
 	if(NULL == buf || 0 == len)
 	{
-		osa_loge("%s:error: param error: buf=%x, len=%d. returning", func, buf, len);
+		osa_loge("%s:error: sockFd=%d, param error: buf=%x, len=%d. returning", func, sockFd, buf, len);
 		return OSA_ERR_BADPARAM;
 	}
 
-	osa_logd("%s: entered. buf=%x, len=%d, flags=%x", func, buf, len, flags);
+	osa_logd("%s: entered. sockFd=%d, buf=%x, len=%d, flags=%x", func, sockFd, buf, len, flags);
 
 	if(1 == isAsync)
 	{
@@ -757,7 +757,7 @@ ret_e osa_socket :: send(void * buf, i32_t len, i32_t flags, osa_sockErr_e &sock
 		qObj.size = sizeof(pktData);
 
 		sockQ.push(qObj);
-		osa_logi("%s: data pushed for async send. returning", func);
+		osa_logi("%s: sockFd=%d, data pushed for async send. returning", func, sockFd);
 		sockErr =  OSA_SOCKERR_INPROGRESS;
 		return OSA_SUCCESS;
 	}
@@ -766,13 +766,13 @@ ret_e osa_socket :: send(void * buf, i32_t len, i32_t flags, osa_sockErr_e &sock
 	result = ::send(sockFd, buf, len, 0);
 	if(-1 ==  result)
 	{
-		osa_loge("%s:error: socket blocking-send failed. errorno=%s (%d). returning", func, strerror(errno), errno);
+		osa_loge("%s:error: sockFd=%d, socket blocking-send failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
 		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAIL;	
 		return ret;
 	}
 
-	osa_logd("%s: success. %d bytes sent. returning", func, result);
+	osa_logd("%s: success. sockFd=%d, %d bytes sent. returning", func, sockFd, result);
 
 	return ret;
 }
@@ -786,12 +786,12 @@ ret_e osa_socket :: sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrIn_t &
 
 	if(NULL == buf || 0 == len)
 	{
-		osa_loge("%s:error: param error: buf=%x, len=%d. returning", func, buf, len);
+		osa_loge("%s:error: sockFd=%d, param error: buf=%x, len=%d. returning", func, sockFd, buf, len);
 		return OSA_ERR_BADPARAM;
 	}
 
-	osa_logd("%s: entered. buf=%x, len=%d, flags=%x, rAddr.domain=%s, rAddr.addr=%s, rAddr.port=%d", func, 
-		buf, len, flags, osa_enum2str(rAddr.domain), rAddr.addr, rAddr.port);
+	osa_logd("%s: entered. sockFd=%d, buf=%x, len=%d, flags=%x, rAddr.domain=%s, rAddr.addr=%s, rAddr.port=%d", func, 
+		 sockFd, buf, len, flags, osa_enum2str(rAddr.domain), rAddr.addr, rAddr.port);
 
 	if(1 == isAsync)
 	{
@@ -806,7 +806,7 @@ ret_e osa_socket :: sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrIn_t &
 		qObj.size = sizeof(pktData);
 
 		sockQ.push(qObj);
-		osa_logi("%s: data pushed for async send. returning", func);
+		osa_logi("%s: sockFd=%d, data pushed for async send. returning", func, sockFd);
 		sockErr =  OSA_SOCKERR_INPROGRESS;
 		return OSA_SUCCESS;
 	}
@@ -818,18 +818,19 @@ ret_e osa_socket :: sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrIn_t &
 		result = o_osa2unixStruct(rAddr, rAddrIn);
 		if(1 != result)
 		{
-			osa_loge("%s:error: Invalid remote IP address:%s. inet_pton returned %d. returning", func, rAddr.addr, result);
+			osa_loge("%s:error: sockFd=%d, Invalid remote IP address:%s. inet_pton returned %d. returning", func, sockFd, rAddr.addr, result);
 			return OSA_ERR_BADPARAM;
 		}
 
 		result = ::sendto(sockFd, buf, len, 0, (struct sockaddr *)&rAddrIn, sizeof(struct sockaddr_in));
 		break;
+
 		case OSA_AF_INET6:
 		struct sockaddr_in rAddrIn6;
 		result = o_osa2unixStruct(rAddr, rAddrIn6);
 		if(1 != result)
 		{
-			osa_loge("%s:error: Invalid remote IP address:%s. inet_pton returned %d. returning", func, rAddr.addr, result);
+			osa_loge("%s:error: sockFd=%d, Invalid remote IP address:%s. inet_pton returned %d. returning", func, sockFd, rAddr.addr, result);
 			return OSA_ERR_BADPARAM;
 		}
 
@@ -840,18 +841,225 @@ ret_e osa_socket :: sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrIn_t &
 	/* TO DO: Flags is unused right now */
 	if(-1 ==  result)
 	{
-		osa_loge("%s:error: socket blocking-send failed. errorno=%s (%d). returning", func, strerror(errno), errno);
+		osa_loge("%s:error: sockFd=%d, socket blocking-send failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
 		sockErr = o_unix2osaSockErr();
 		ret = OSA_ERR_COREFUNCFAIL;	
 		return ret;
 	}
 
-	osa_logd("%s: success. %d bytes sent. returning", func, result);
+	osa_logd("%s: sockFd=%d, success. %d bytes sent. returning", func, sockFd, result);
 
 	return ret;
 }
 
 
+ret_e osa_socket :: sendto(void *buf, i32_t len, i32_t flags, osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr)
+{
+	char *func = "osa_socket::sendto";
+	int result, unixDomain;
+	ret_e ret=OSA_SUCCESS;
+
+	if(NULL == buf || 0 == len)
+	{
+		osa_loge("%s:error: sockFd=%d, param error: buf=%x, len=%d. returning", func, sockFd, buf, len);
+		return OSA_ERR_BADPARAM;
+	}
+
+	osa_logd("%s: entered. sockFd=%d, buf=%x, len=%d, flags=%x, rAddr.domain=%s, rAddr.addr=%x, rAddr.addrLen=%d", func, sockFd,
+		buf, len, flags, osa_enum2str(rAddr.domain), rAddr.addr, rAddr.addrLen);
+
+	if(1 == isAsync)
+	{
+		pktData_t *pktData = (pktData_t *)malloc(sizeof(pktData_t)); /* This needs to be freed in receiver function OR socket destructor */
+		pktData->buf = buf;
+		pktData->len = len;
+		pktData->isSendTo = true;
+		pktData->genAddr = rAddr;
+
+		q_data_t qObj;
+		qObj.obj = pktData;
+		qObj.size = sizeof(pktData);
+
+		sockQ.push(qObj);
+		osa_logi("%s: sockFd=%d, data pushed for async send. returning", func, sockFd);
+		sockErr =  OSA_SOCKERR_INPROGRESS;
+		return OSA_SUCCESS;
+	}
+
+	switch(rAddr.domain)
+	{
+		case OSA_AF_UNIX:
+		struct sockaddr_un * rAddrUn = (struct sockaddr_un *)rAddr.addr;
+
+		if(0 == rAddr.addrLen || NULL == rAddr.addr)
+		{
+			osa_loge("%s:error: sockFd=%d, unix domain expects sockaddr_un(len=%d). Instead passed addr is %d, len=%d. returning", func, 
+				sockFd, sizeof(struct sockaddr_un), rAddr.addr, rAddr.addrLen);
+			return OSA_ERR_BADPARAM;
+		}
+
+		result = ::sendto(sockFd, buf, len, 0, (struct sockaddr *)&rAddrUn, sizeof(struct sockaddr_un));
+		break;
+	}
+
+	/* TO DO: Flags is unused right now */
+	if(-1 ==  result)
+	{
+		osa_loge("%s:error: sockFd=%d, socket blocking-send failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
+		sockErr = o_unix2osaSockErr();
+		ret = OSA_ERR_COREFUNCFAIL;	
+		return ret;
+	}
+
+	osa_logd("%s: success. sockFd=%d, %d bytes sent. returning", func, sockFd, result);
+
+	return ret;
+}
+
+
+ret_e osa_socket :: recv(void *buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, osa_sockErr_e &sockErr)
+{
+	char *func = "osa_socket::recv";
+	ret_e ret=OSA_SUCCESS;
+
+	if(NULL == buf || 0 == bufSize || NULL == bytesRead)
+	{
+		osa_loge("%s:error: sockFd=%d, param error: buf=%x, bufSize=%d, bytesRead=%x returning", func, sockFd, buf, bufSize, bytesRead);
+		return OSA_ERR_BADPARAM;
+	}
+
+	osa_logd("%s: entered. sockFd=%d, buf=%x, bufSize=%d, flags=%x", func, sockFd, buf, bufSize, flags);
+
+	*bytesRead = ::recv(sockFd, buf, bufSize, flags);
+
+	if(0 >= *bytesRead)
+	{
+		osa_loge("%s:error: sockFd=%d, socket blocking-recv failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
+		sockErr = o_unix2osaSockErr();
+		ret = OSA_ERR_COREFUNCFAIL;	
+		return ret;	
+	}
+
+	osa_logd("%s: success. sockFd=%d, %d bytes received. returning", func, sockFd, *bytesRead);
+
+	return ret;
+}
+
+
+ret_e osa_socket :: recvfrom(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, 
+		osa_sockAddrIn_t &rAddr, osa_sockErr_e &sockErr)
+{
+	char *func = "osa_socket::recvfrom";
+	ret_e ret=OSA_SUCCESS;
+	socklen_t sockLen=0;
+
+	if(NULL == buf || 0 == bufSize || NULL == bytesRead)
+	{
+		osa_loge("%s:error: sockFd=%d, param error: buf=%x, bufSize=%d, bytesRead=%x returning", func, sockFd, buf, bufSize, bytesRead);
+		return OSA_ERR_BADPARAM;
+	}
+
+	osa_logd("%s: entered. sockFd=%d, buf=%x, bufSize=%d, flags=%x", func, sockFd, buf, bufSize, flags);
+
+	switch(rAddr.domain)
+	{
+		case OSA_AF_INET:
+		struct sockaddr_in rAddrIn;
+
+
+		*bytesRead = ::recvfrom(sockFd, buf, bufSize, flags, (struct sockaddr *)&rAddrIn, &sockLen);
+	
+		if(0 >= *bytesRead)
+		{
+			osa_loge("%s:error: sockFd=%d, socket blocking-recvfrom failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
+			sockErr = o_unix2osaSockErr();
+			ret = OSA_ERR_COREFUNCFAIL;	
+			return ret;	
+		}
+
+		o_unix2OsaStruct(rAddrIn, rAddr);
+		break;
+
+		case OSA_AF_INET6:
+		struct sockaddr_in6 rAddrIn6;
+		*bytesRead = ::recvfrom(sockFd, buf, bufSize, flags, (struct sockaddr *)&rAddrIn6, &sockLen);
+
+		if(0 >= *bytesRead)
+		{
+			osa_loge("%s:error: sockFd=%d, socket blocking-recvfrom failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
+			sockErr = o_unix2osaSockErr();
+			ret = OSA_ERR_COREFUNCFAIL;	
+			return ret;	
+		}
+
+		o_unix2OsaStruct(rAddrIn6, rAddr);
+		break;
+	}
+
+	osa_logd("%s: success. sockFd=%d, %d bytes recvd from rAddr:(%s:%d). returning", func, sockFd, *bytesRead, rAddr.addr, rAddr.port);
+
+	return ret;
+}
+
+
+ret_e osa_socket :: recvfrom(void * buf, i32_t bufSize, i32_t *bytesRead, i32_t flags, 
+		osa_sockAddrGeneric_t &rAddr, osa_sockErr_e &sockErr)
+{
+	char *func = "osa_socket::recvfrom";
+	ret_e ret=OSA_SUCCESS;
+	socklen_t sockLen=0;
+
+	if(NULL == buf || 0 == bufSize || NULL == bytesRead)
+	{
+		osa_loge("%s:error: sockFd=%d, param error: buf=%x, bufSize=%d, bytesRead=%x returning", func, sockFd, buf, bufSize, bytesRead);
+		return OSA_ERR_BADPARAM;
+	}
+
+	osa_logd("%s: entered. sockFd=%d, buf=%x, bufSize=%d, flags=%x", func, sockFd, buf, bufSize, flags);
+
+	switch(rAddr.domain)
+	{
+		case OSA_AF_UNIX:
+		struct sockaddr_un rAddrUn;
+		if(rAddr.addrLen < sizeof(struct sockaddr_un))
+		{
+			osa_loge("%s: sockFd=%d, rAddr.addrlen (%d) is not enough to store remote address. It should be %d", func, sockFd, rAddr.addrLen, sizeof(struct sockaddr_un));
+			return OSA_ERR_BADPARAM;		
+		}
+
+		*bytesRead = ::recvfrom(sockFd, buf, bufSize, flags, (struct sockaddr *)&rAddrUn, &sockLen);
+	
+		if(0 >= *bytesRead)
+		{
+			osa_loge("%s:error: sockFd=%d, socket blocking-recvfrom failed. errorno=%s (%d). returning", func, sockFd, strerror(errno), errno);
+			sockErr = o_unix2osaSockErr();
+			ret = OSA_ERR_COREFUNCFAIL;	
+			return ret;	
+		}
+
+		/* TO DO */memcpy(rAddr.addr, &rAddrUn, sizeof(struct sockaddr_un));
+		break;
+	}
+
+	osa_logd("%s: success. sockFd=%d, %d bytes received. returning", func, sockFd, *bytesRead);
+
+	return ret;
+}
+
+ret_e osa_socket :: destroy()
+{
+	char *func = "osa_socket::destroy";
+	int result;
+	osa_logd("%s: entered");
+	result = ::close(sockFd);
+	if(0!=result)
+	{
+		osa_loge("%s: close failed. errno=%s (%d)", func, strerror(errno), errno);
+		return OSA_ERR_COREFUNCFAIL;
+	}
+
+	return OSA_SUCCESS;
+}
 
 int main()
 {}

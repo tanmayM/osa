@@ -231,7 +231,8 @@ typedef struct osa_sockAddrIn_t
 
 /* osa_sockAddrGeneric_t : The Socket IPC has become ubiquitous and many address families (domains) are created to
 						   use sockets for various tasks. This generic structure is used to wrap all of those.
-	addr : This should be a pointer to domain specific structure. Library will internally typecast it according to domain
+	addr : This should be a pointer to domain specific structure. Library will internally typecast it according to domain.
+			e.g. in case of AF_UNIX, it should point to a valid 'sockaddr_un' structure.
 	addrLen : Size of the buffer/structure pointed to by 'addr'
 */
 typedef struct osa_sockAddrGeneric_t
