@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <netpacket/packet.h>
 #include <net/ethernet.h> /* the L2 protocols */
-
+#include <fcntl.h>
 #include "osa_sock_internal.h"
 
 char * osa_enum2str(osa_sockDomain_e domain)
@@ -310,9 +310,45 @@ ret_e osa_socket::create(osa_sockDomain_e domain, osa_sockType_e type, i32_t pro
 		ret = OSA_SUCCESS;
 	}
 
-	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
+	osa_logi("%s: success. sockFd=%d, returning", func, sockFd);
 }
 
+ret_e osa_socket :: makeAsynchronous(osa_sendCompleteCb sendCompleteCb, osa_recvReadyCb recvReadyCb, void * appData)
+{
+	char * func="osa_socket::makeAsynchronous";
+
+	if(NULL==sendCompleteCb || NULL==recvReadyCb)
+	{
+		osa_loge("%s: sockFd=%d, callback function pointer/s passed are NULL. sendCompleteCb=%x, recvReadyCb=%x", func, sockFd,
+			sendCompleteCb, recvReadyCb);
+		return OSA_ERR_BADPARAM;
+	}
+
+	osa_logd("%s: Entered. sockFd=%d, sendCompleteCb=%x, recvReadyCb=%x, appdata=%x", func, 
+		sockFd, sendCompleteCb, recvReadyCb, appData);
+
+	int flags = fcntl(sockFd, F_GETFL, 0);
+
+	if (flags < 0)
+	{
+		osa_loge("%s: sockFd=%d, fcntl F_GETFL failed. Can't make the socket asynchronous", func, sockFd);
+		return OSA_ERR_COREFUNCFAIL;
+	}
+
+	flags = (flags|O_NONBLOCK);
+
+	if(0 != fcntl(sockFd, F_SETFL, flags) )
+	{
+		osa_loge("%s: sockFd=%d, error: fcntl F_SETFL failed. Can't make the socket asynchronous");
+		return OSA_ERR_COREFUNCFAIL;
+	}
+
+	this->sendCompleteCb = sendCompleteCb;
+	this->recvReadyCb = recvReadyCb;
+	this->appData = appData;
+	osa_logi("%s: sockFd=%d, socket is set to be asynchronous successfully", func, sockFd);
+	return OSA_SUCCESS;
+}
 
 ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 {
@@ -405,7 +441,7 @@ ret_e osa_socket::bind(osa_sockAddrIn_t &sockAddr, osa_sockErr_e &sockErr)
 		break;
 	}
 
-	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
+	osa_logi("%s: success. sockFd=%d, returning", func, sockFd);
 
 	return ret;
 }
@@ -514,7 +550,7 @@ ret_e osa_socket::bind(osa_sockAddrGeneric_t &sockAddr, osa_sockErr_e &sockErr)
 		break;
 	}
 
-	osa_logd("%s: success. sockFd=%d, returning", func, sockFd);
+	osa_logi("%s: success. sockFd=%d, returning", func, sockFd);
 
 	return ret;
 }
@@ -1058,6 +1094,7 @@ ret_e osa_socket :: destroy()
 		return OSA_ERR_COREFUNCFAIL;
 	}
 
+	osa_logi("%s: socket %d closed", sockFd);
 	return OSA_SUCCESS;
 }
 

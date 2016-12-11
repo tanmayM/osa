@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <cstdint>  /* for cpp;  In case you are using c, the parallel header is stdint.h */
 #include <stdlib.h>
+
+/* TO DO: Include in platform independent manner */ 
+#include <thread>
+#include "osa_threads.h"
 //#endif
 
 #ifdef _WIN32
@@ -62,7 +66,8 @@ char * osa_enum2Str(ret_e ret);
 * 		String Processing
 *****************************************/
 
-ret_e osa_strlen(char * str);		/* Get length of string (NULL character at the end is not counted) */
+//ret_e osa_strlen(char * str, u32_t &len);		/* Get length of string (NULL character at the end is not counted) */
+int osa_strlen(char * str);
 
 ret_e osa_strcpy(char *dst, char * src, i32_t dstSz);			/* copy string src to dst. Max (dstSz-1) bytes will be 
 																   copied */
@@ -286,7 +291,7 @@ public:
 	ret_e create(osa_sockDomain_e domain, osa_sockType_e type, i32_t protocol, osa_sockErr_e &sockErr);
 
 /* Set the socket for asynchronous io. Refer Asynchronous IO section for details */
-	ret_e makeASynchronous(osa_sendCompleteCb sendCompleteCb, osa_recvReadyCb recvReadyCb, void * appData);
+	ret_e makeAsynchronous(osa_sendCompleteCb sendCompleteCb, osa_recvReadyCb recvReadyCb, void * appData);
 
 
 /* bind		: Bind an address to the empty socket.
@@ -404,11 +409,11 @@ private:
 	int sockFd;
 	int isAsync;
 	osa_q sockQ;
-
+	osa_sendCompleteCb sendCompleteCb;
+	osa_recvReadyCb recvReadyCb;
+	void * appData;
 	void setSockFd(int newSockFd);
 };
-
-
 
 
 /* TO DO :socketpair */
@@ -525,7 +530,7 @@ ret_e osa_file_getCurPos(osa_fileHd_t &hd, int &pos, osa_fileErr_e &fileErr);
 *					T H R E A D S
 *********************************************************/
 
-typedef void *	osa_threadHd_t;
+typedef osa_ThreadHandle_t osa_threadHd_t;
 
 
 /* To Do : pthread_sigmask, sigaltstack, detachable thread,	pthread_kill
@@ -564,7 +569,6 @@ typedef void (*CleanupCb) (void *arg);
 typedef enum osa_thread_priority_e
 {
 	OSA_THREAD_PRIO_DEFAULT,
-	OSA_THREAD_PRIO_IDLE,
 	OSA_THREAD_PRIO_LOW,
 	OSA_THREAD_PRIO_HIGH,
 	OSA_THREAD_PRIO_CRITICAL,
@@ -585,14 +589,14 @@ typedef struct osa_thread_stack_t
 					   everything that you do normally from within this function and it will be executed as part of thread 't'.
 		IN prio 	:: Thread priority. Set priority for the thread according to the application needs. Value should be an
 					   enum from #osa_thread_priority_e. User should set it to OSA_THREAD_PRIO_DEFAULT if no special requirement.
-		IN stack    :: User can provide where thread stack should reside. This should be used only if user has specialized
-					   requirements. Otherwise it should be set to NULL.
-		
 		IN thrName 	:: Give a name to this thread. Helpful for debugging. Can be set to NULL. IMP: Max length of the string 
 					   should be 15.
+		IN arg 		:: Argument to ThreadFunc-Func. This can be used to share data from calling thread to called thread
+		IN stack    :: User can provide where thread stack should reside. This should be used only if user has specialized
+					   requirements. Otherwise it should be set to NULL.
 */
-ret_e osa_thread_create(osa_threadHd_t &t, ThreadFunc func, osa_thread_priority_e prio, osa_thread_stack_t &stack,  
-							void * arg, char thrName[15]);
+ret_e osa_thread_create(osa_threadHd_t &t, ThreadFunc func, osa_thread_priority_e &prio, char thrName[15], void * arg,
+			osa_thread_stack_t *stack);
 	
 
 
@@ -623,30 +627,30 @@ ret_e osa_thread_create(osa_threadHd_t &t, ThreadFunc func, osa_thread_priority_
 					   calls w ...) and wants this thread to stop/die immediately. 
 					   Note: This function can also be called from 'main()' function of the 'process'. Normally, if main returns then
 					   all other threads get killed. But if you call osa_thread_exit() from main(), then only main thread exits and
-					   program continues untill all other threads exit.
+						   program continues untill all other threads exit.
 		OUT retVal 	:: Return value to be returned to any other thread which has called pthread_join() on this thread.
 */
 ret_e osa_thread_exit(void * retVal);
 
 
 /* osa_thread_kill :: Kill another thread  (TO DO)
-					  Not sure how this API should behave, at this point. Should it kill the thread immediately or should that
-					  thread be given a chance to exit itself
-*/
+					  Not sure how this API should behave, at this point. Or should there even be such API. Threads can
+					  communicate using global variables & mutexes to achieve this purpose too 
 ret_e osa_thread_kill(osa_threadHd_t &t);
+*/
 
-/* osa_thread_cleanup_push() : Register cleanup callback.
+/* TO DO: osa_thread_cleanup_push() : Register cleanup callback.
 		If osa_thread_exit() is called after this, this callback function will automatically be called. 'arg' will be passed as its 
 		argument.
-*/
 ret_e osa_thread_cleanup_push(CleanupCb cleanupCb, void * arg);
+*/
 
 /* osa_thread_cleanup_pop(): Remove the topmost cleanup function from cleanup stack
    IMP: This needs to be called ONLY in case of normal execution. If thread-exit is called, it will be executed automatically.
    Also, Its important to call pop if you had called push before. Otherwise it could lead to errors.
    		IN execute :: Do you want to execute it after popping. 0 : Don't execute. Non-zero value means execute.
-*/
 ret_e osa_thread_cleanup_pop(int execute);
+*/
 
 
 /* THREAD SYNCHRONIZATION */
@@ -663,13 +667,18 @@ ret_e osa_thread_cleanup_pop(int execute);
 */
 typedef void * osa_mutex_t;
 
-/* osa_mutex_init : Initialize a mutex. Before using a mutex, you need to initialize it. Basically operating system will do
-				    the necessary preparation to handle lock/unlock operations in future */
-ret_e osa_mutex_init(osa_mutex_t &mutex);
 
-/* osa_mutex_destroy : Destroy a mutex. After this API is called, this mutex should not be used. Or there will be undefined behaviour
-*/
-ret_e osa_mutex_destroy(osa_mutex_t &mutex);
+class osa_mutex
+{
+	/* osa_mutex : Initialize a mutex. Before using a mutex, you need to initialize it. Basically operating system will do
+				    the necessary preparation to handle lock/unlock operations in future */
+	osa_mutex();
+
+	~osa_mutex();
+
+	/* osa_mutex_destroy : Destroy a mutex. After this API is called, this mutex should not be used. Or there will be undefined behaviour
+		*/
+	ret_e destroy();
 
 /* osa_mutex_lock() : Acquire the lock.
 					Once this API returns successfully, nobody else can get the lock unless the same thread calls osa_mutex_unlock().
@@ -677,16 +686,19 @@ ret_e osa_mutex_destroy(osa_mutex_t &mutex);
 					exercise (popularly called critical-section), it should be wrapped within these lock-unlock APIs. So that only one 
 					thread will execute it at any time and there won't be a race condition
 */
-ret_e osa_mutex_lock(osa_mutex_t &mutex);
+	ret_e lock(char * locker);
 
 /* osa_mutex_unlock() : Release/Unlock a mutex.
 					This call must be made by the thread if it has called osa_mutex_lock() before. It should be called at the end
 					of critical section. If 'lock' was called and unlock is never called then other threads might remain locked 
 					forever
 */
-ret_e osa_mutex_unlck(osa_mutex_t &mutex);
+	ret_e unlock(char * unlocker);
 
+private:
+	pthread_mutex_t mutex;
 
+};
 /* SEMAPHORES : Semaphore are also a form of lock that allow multiple people (threads) in.
 				As described here : http://niclasw.mbnet.fi/MutexSemaphore.html, they are like a set of keys to identical toilets.
 				For the sake of analogy, assume that keys are hanging just outside door. If there is at least one key available, 

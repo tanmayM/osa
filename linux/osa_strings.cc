@@ -1,18 +1,20 @@
 #include "osa.h"
 #include <string.h>
 
-ret_e osa_strlen(char * str, u32_t &len)
+//ret_e osa_strlen(char * str, u32_t &len)
+int osa_strlen(char * str)
 {
+	/*
 	char * func = "osa_strlen";
 	if(NULL == str)
 	{
 		osa_loge("%s: Input string is NULL", func);
 		return OSA_ERR_BADPARAM;
 	}
+*/
+	return strlen(str);
 
-	len = strlen(str);
-
-	return OSA_SUCCESS;
+	//return OSA_SUCCESS;
 }
 
 /* copy string src to dst. Max (dstSz-1) bytes will be copied */
