@@ -1,5 +1,7 @@
 #include "osa.h"
 #include "osa_threads.h"
+#include <string.h>
+#include <assert.h>
 
 char * osa_enum2str(osa_thread_priority_e prio)
 {
@@ -123,55 +125,100 @@ ret_e osa_thread_exit(void *retVal)
 }
 
 
+/********************************************************
+*					M U T E X
+*********************************************************/
+
+
 osa_mutex :: osa_mutex(void)
+{
+	isAlive=0;
+}
+
+
+osa_mutex :: ~osa_mutex(void)
+{
+	if(1 == isAlive)
+	{
+		pthread_mutex_destroy(&mutex);
+		osa_logi("osa_mutex::destructor: Mutex %x destroyed", &mutex);
+	}
+}
+
+ret_e osa_mutex :: create(void)
 {
 	int result = pthread_mutex_init(&mutex, NULL);
 
 	if(0 == result)
 	{
-		osa_logd("osa_mutex::init Mutex %x created", &mutex);
+		osa_logd("osa_mutex::create Mutex %x created", &mutex);
 	}
 	else
 	{
-		osa_logd("osa_mutex::init Mutex %x creation failed", &mutex);
+		osa_logd("osa_mutex::create Mutex %x creation failed", &mutex);
+		return OSA_ERR_COREFUNCFAIL;
 	}
+
+	isAlive=1;
+	return OSA_SUCCESS;
 }
 
-osa_mutex :: ~osa_mutex(void)
-{
-	pthread_mutex_destroy(&mutex);
-	osa_logi("osa_mutex::destructor: Mutex %x destroyed", &mutex);
-}
+
 
 ret_e osa_mutex :: destroy()
 {
-	pthread_mutex_destroy(&mutex);
-	osa_logi("osa_mutex::destroy: Mutex %x destroyed", &mutex);
+	if(1 == isAlive)
+	{
+		pthread_mutex_destroy(&mutex);
+		osa_logd("osa_mutex::destroy: Mutex %x destroyed", &mutex);
+		isAlive = 0;
+	}
 }
 
 ret_e osa_mutex :: lock(char * locker)
 {
-	int result = pthread_mutex_lock(&mutex);
+	char * func = "osa_mutex::lock";
 
-	if(0 != result)
+	if(1 == isAlive)
 	{
-		osa_loge("osa_mutex::lock failed. result=%d\n", result);
-		return OSA_ERR_COREFUNCFAIL;
-	}
+		int result = pthread_mutex_lock(&mutex);
 
-	osa_logd("mutex %x locked by ", &mutex, locker?locker:"--");
+		if(0 != result)
+		{
+			osa_loge("%s:error: failed. result=%d\n", func, result);
+			return OSA_ERR_COREFUNCFAIL;
+		}
+
+		osa_logv("%s: mutex %x locked by ", func, &mutex, locker?locker:"--");
+	}
+	else
+	{
+		osa_loge("%s: error: mutex %x is destroyed. locker=%s. Dying", func, &mutex, locker?locker:"--");
+		osa_assert(0);
+	}
 
 	return OSA_SUCCESS;
 }
 
 ret_e osa_mutex :: unlock(char * unlocker)
 {
-	int result = pthread_mutex_unlock(&mutex);
+	char * func = "osa_mutex::unlock";
 
-	if(0 != result)
+	if(1 == isAlive)
 	{
-		osa_loge("osa_mutex::unlock failed. result=%d\n", result);
-		return OSA_ERR_COREFUNCFAIL;
+		int result = pthread_mutex_unlock(&mutex);
+
+		if(0 != result)
+		{
+			osa_loge("%s: error: failed. result=%d\n", func, result);
+			return OSA_ERR_COREFUNCFAIL;
+		}
+		osa_logv("%s: mutex %x unlocked by ", func, &mutex, unlocker?unlocker:"--");
+	}
+	else
+	{
+		osa_loge("%s: error: mutex %x is destroyed. unlocker=%s. Dying", func, &mutex, unlocker?unlocker:"--");
+		osa_assert(0);
 	}
 
 	osa_logd("mutex %x unlocked by ", &mutex, unlocker?unlocker:"--");
@@ -179,3 +226,130 @@ ret_e osa_mutex :: unlock(char * unlocker)
 	return OSA_SUCCESS;	
 }
 
+
+/********************************************************
+*					S E M A P H O R E
+*********************************************************/
+
+
+osa_semaphore :: osa_semaphore()
+{
+	maxCount=0;
+	isAlive = 0;
+}
+
+ret_e osa_semaphore :: create(uint32_t count)
+{
+	int result = sem_init(&sem, 0, count);
+
+	if(0 == result)
+	{
+		osa_logd("osa_semaphore:: created. count=%d", count);
+	}
+	else
+	{
+		osa_logd("osa_semaphore:: creation failed. count=%d, errno=%s (%d)", count, strerror(errno), errno);
+		return OSA_ERR_COREFUNCFAIL;
+	}
+
+	maxCount = count;
+	isAlive = 1;
+
+	return OSA_SUCCESS;
+}
+
+osa_semaphore :: ~osa_semaphore()
+{
+	if(1 == isAlive)
+	{
+		int currCount=0;
+		int result = sem_getvalue(&sem, &currCount);
+
+		if(0 != result)
+		{
+			osa_logd("osa::semaphore destructor. sem_getvalue failed - %s (%d). something wrong", strerror(errno), errno);
+		return; /* TO DO: Do we just return? assert? call destroy anyways?? */
+		}
+
+		result = sem_destroy(&sem);
+		if(0 != result)
+		{
+			osa_logd("osa::semaphore destructor. sem_destroy failed - %s (%d). something wrong", strerror(errno), errno);
+		return; /* TO DO: Do we just return? assert? call destroy anyways?? */
+		}
+
+		isAlive = 0;
+	}
+}
+
+ret_e osa_semaphore :: destroy()
+{
+	if(1 == isAlive)
+	{
+		int currCount=0;
+		int result = sem_getvalue(&sem, &currCount);
+
+		if(0 != result)
+		{
+			osa_loge("osa::semaphore destroy. sem_getvalue failed - %s (%d). something wrong", strerror(errno), errno);
+			return OSA_ERR_COREFUNCFAIL; /* TO DO: Do we just return? assert? call destroy anyways?? */
+		}
+
+		result = sem_destroy(&sem);
+		if(0 != result)
+		{
+			osa_loge("osa::semaphore destroy. sem_destroy failed - %s (%d). something wrong", strerror(errno), errno);
+			return OSA_ERR_COREFUNCFAIL; /* TO DO: Do we just return? assert? call destroy anyways?? */
+		}
+
+		isAlive = 0;
+	}
+}
+
+ret_e osa_semaphore :: wait(char * waiter)
+{
+	if(isAlive)
+	{
+		int result = sem_wait(&sem);
+
+		if(0 != result)
+		{
+			osa_loge("osa_sem::wait failed. result=%d, errno=%s (%d)\n", result, strerror(errno), errno);
+			return OSA_ERR_COREFUNCFAIL;
+		}
+
+		osa_logv("semaphore %x locked by ", &sem, waiter?waiter:"--");
+	}
+	else
+	{
+		osa_logd("semaphore %x is destroyed. waiter=%s", &sem, waiter?waiter:"--");
+		osa_assert(1==0);
+	}
+
+	return OSA_SUCCESS;
+}
+
+ret_e osa_semaphore :: post(char * poster)
+{
+	char * func = "osa_semaphore::post";
+
+	if(isAlive)
+	{
+		int result = sem_post(&sem);
+
+		if(0 != result)
+		{
+			osa_loge("%s: post failed. result=%d, poster=%s, \n", func, result, poster?poster:"--");
+			return OSA_ERR_COREFUNCFAIL;
+		}
+
+		osa_logv("%s: semaphore %x unlocked by %s", func, &sem, poster?poster:"--");
+	}
+	else
+	{
+		osa_loge("%s: semaphore %x is destroyed. poster=%s. Dying", func, &sem, poster?poster:"--");
+		osa_assert(0);
+	}
+
+	return OSA_SUCCESS;	
+}

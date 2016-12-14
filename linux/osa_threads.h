@@ -2,7 +2,7 @@
 #define __O_S_ABS_THREADS__
 
 #include <pthread.h>
-
+#include <semaphore.h>
 
 typedef struct osa_ThreadHandle_t
 {

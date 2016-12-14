@@ -19,10 +19,11 @@
 #define LOGLVL_ERROR	0
 #define LOGLVL_INFO 	1
 #define LOGLVL_DEBUG 	2
+#define LOGLVL_VERBOSE 	3
 
-#define LOG_LEVEL		LOGLVL_DEBUG
+#define LOG_LEVEL		LOGLVL_VERBOSE
 
-
+#define osa_logv printf;
 #define osa_logd printf;
 #define osa_loge printf;
 #define osa_logi printf;
@@ -54,6 +55,7 @@ typedef enum
 							   function returned an error. You need to check platform specific error details */
 }ret_e;
 
+#define osa_assert assert /* TO DO: FIXME. Needs to be define per platform/OS */
 
 /*************************************************
 * 		U T I L I T Y    F U N C T I O N S 
@@ -665,7 +667,6 @@ ret_e osa_thread_cleanup_pop(int execute);
 		   Right now additional mutex parameters such as 'recursive-mutex' are not supported (deliberately). Simply because I
 		   haven't seen the need for it in my experience. If there is a real need, this feature can be added.
 */
-typedef void * osa_mutex_t;
 
 
 class osa_mutex
@@ -676,6 +677,7 @@ class osa_mutex
 
 	~osa_mutex();
 
+	ret_e create();
 	/* osa_mutex_destroy : Destroy a mutex. After this API is called, this mutex should not be used. Or there will be undefined behaviour
 		*/
 	ret_e destroy();
@@ -697,29 +699,35 @@ class osa_mutex
 
 private:
 	pthread_mutex_t mutex;
+	int isAlive;
 
 };
+
+
 /* SEMAPHORES : Semaphore are also a form of lock that allow multiple people (threads) in.
 				As described here : http://niclasw.mbnet.fi/MutexSemaphore.html, they are like a set of keys to identical toilets.
 				For the sake of analogy, assume that keys are hanging just outside door. If there is at least one key available, 
 				anybody can take it and get inside the toilet. If there is no key, you need to 'wait'.
 
 				When somebody goes out, s/he 'posts' the key i.e. puts it back outside the door which can be used by 
-				anybody waiting outside in a queue 
+				anybody waiting outside in a queue. This library supports semaphore to be shared between Threads only 
+				(not processes)
 */
-
-typedef void * osa_sem_t;
-
+class osa_semaphore
+{
 /* osa_sem_init :: Initialize a semaphore.
-	IN/OUT s 		:: Semaphore handle. Its populated with correct value if call is successful.
-	IN     count	:: Initial count of the semaphore
 */
-ret_e osa_sem_init(osa_sem_t &s, uint32_t count);
+	osa_semaphore();
 
+
+	~osa_semaphore();
+
+	/* IN     count	:: Initial count of the semaphore */
+	ret_e create(uint32_t count);
 /* osa_sem_destroy :: Destroy a sempahore
 	IN s  			:: Semaphore to be destroyed
 */
-ret_e osa_sem_destroy(osa_sem_t &s);
+	ret_e destroy();
 
 /* osa_sem_wait 	:: Acquire a semaphore.
 					   Its more like osa--sem--get, but the thread waits (blocks) if no semaphore is available, hence the name wait.
@@ -728,14 +736,21 @@ ret_e osa_sem_destroy(osa_sem_t &s);
 
 					   Internally, 't' decrements the 'count' (of available semaphores)
 */
-ret_e osa_sem_wait(osa_sem_t &s);
+	ret_e wait(char *waiter);
 
 /* osa_sem_post		:: Release the semaphore
 					   Once the critical section code is executed, the thread should call osa_sem_post() to release the semaphore
 					   for somebody else to use
 					   Internally, t increments the 'count' (of available semaphores)
 */
-ret_e osa_sem_post(osa_sem_t &s);
+	ret_e post(char * poster);
+
+private:
+
+	sem_t sem;
+	uint32_t maxCount;
+	int isAlive;
+};
 
 
 /* CONDITIONAL VARIABLES : Conditional variables are signalling mechanisms. It can be used to stop/start the execution of a thread until
@@ -768,7 +783,7 @@ ret_e osa_cond_destroy(osa_cond_t &c);
 	IN m 			: Paired mutex. Conditional variables are always tied with mutexes. This mutex will be unlocked before going
 					  to sleep and locked again after other threads wakes us up.
 */
-ret_e osa_cond_wait(osa_cond_t &c, osa_mutex_t &m);
+ret_e osa_cond_wait(osa_cond_t &c, osa_mutex &m);
 
 /* osa_cond_signal() : Signal/wake-up one of the waiting threads.
 					   If multiple threads are waiting, only one thread will be chosen based on scheduling policy and woken up.
