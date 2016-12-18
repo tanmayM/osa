@@ -671,6 +671,7 @@ ret_e osa_thread_cleanup_pop(int execute);
 
 class osa_mutex
 {
+public: 
 	/* osa_mutex : Initialize a mutex. Before using a mutex, you need to initialize it. Basically operating system will do
 				    the necessary preparation to handle lock/unlock operations in future */
 	osa_mutex();
@@ -697,6 +698,9 @@ class osa_mutex
 */
 	ret_e unlock(char * unlocker);
 
+	/* getNativeMutex: Returns the platform specific object. This is needed for example in case of using conditional variables */
+	void * getNativeMutex();
+
 private:
 	pthread_mutex_t mutex;
 	int isAlive;
@@ -715,6 +719,7 @@ private:
 */
 class osa_semaphore
 {
+public: 
 /* osa_sem_init :: Initialize a semaphore.
 */
 	osa_semaphore();
@@ -745,6 +750,7 @@ class osa_semaphore
 */
 	ret_e post(char * poster);
 
+
 private:
 
 	sem_t sem;
@@ -766,38 +772,49 @@ private:
 						   'wait' api will return and thread can continue. Due to this internal ugliness, the caller should not assume that
 						   values of global variables will be same as before the 'wait' call.
 */
-typedef void * osa_cond_t;
+
+class osa_cond
+{
+public:
+	osa_cond();
+
+	~osa_cond();
 
 /* osa_cond_init() : Initialize a conditional variable.
 		OUT c 	   : After successful initialization, 'c' can be used for further actions
 */
-ret_e osa_cond_init(osa_cond_t &c);
+
+
+	ret_e create();
 
 /* osa_cond_destroy() : Destroy a conditional variable.
  		OUT c 		  : Conditional variable to be destroyed. 'c' can no longer be used after this api call.
 */
-ret_e osa_cond_destroy(osa_cond_t &c);
+	ret_e destroy();
 
 /* osa_cond_wait()	: Wait for signal on conditional variable c
 	IN c 			: Conditional variable to be waited on. Must be initialized using osa_cond_init() before
 	IN m 			: Paired mutex. Conditional variables are always tied with mutexes. This mutex will be unlocked before going
 					  to sleep and locked again after other threads wakes us up.
 */
-ret_e osa_cond_wait(osa_cond_t &c, osa_mutex &m);
+	ret_e wait(osa_mutex &m, char * waiter);
 
 /* osa_cond_signal() : Signal/wake-up one of the waiting threads.
 					   If multiple threads are waiting, only one thread will be chosen based on scheduling policy and woken up.
 	IN c 			 : conditional variable to be signaled.
 */
-ret_e osa_cond_signal(osa_cond_t &c);
+	ret_e signal(char * poster);
 
 /* osa_cond_broadcast() : Signal/wake-up all the waiting threads.
 					   All threads will be woken up. All will try to get a lock (internally). One by one, as threads complete
 					   critical section, they will release mutex and new thread will acquire it and proceed.
 */
-ret_e osa_cond_broadcast(osa_cond_t &c);
+	ret_e broadcast(char *broadcaster);
 
-
+private:
+	pthread_cond_t cond;
+	int isAlive;
+};
 
 
 

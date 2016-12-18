@@ -238,6 +238,7 @@ osa_semaphore :: osa_semaphore()
 	isAlive = 0;
 }
 
+
 ret_e osa_semaphore :: create(uint32_t count)
 {
 	int result = sem_init(&sem, 0, count);
@@ -260,6 +261,7 @@ ret_e osa_semaphore :: create(uint32_t count)
 
 osa_semaphore :: ~osa_semaphore()
 {
+	char * func = "~osa_semaphore";
 	if(1 == isAlive)
 	{
 		int currCount=0;
@@ -267,23 +269,25 @@ osa_semaphore :: ~osa_semaphore()
 
 		if(0 != result)
 		{
-			osa_logd("osa::semaphore destructor. sem_getvalue failed - %s (%d). something wrong", strerror(errno), errno);
-		return; /* TO DO: Do we just return? assert? call destroy anyways?? */
+			osa_logd("%s: sem_getvalue failed - %s (%d). something wrong", func, strerror(errno), errno);
+			return; /* TO DO: Do we just return? assert? call destroy anyways?? */
 		}
 
 		result = sem_destroy(&sem);
 		if(0 != result)
 		{
-			osa_logd("osa::semaphore destructor. sem_destroy failed - %s (%d). something wrong", strerror(errno), errno);
+			osa_logd("%s: sem_destroy failed - %s (%d). something wrong", func, strerror(errno), errno);
 		return; /* TO DO: Do we just return? assert? call destroy anyways?? */
 		}
 
+		osa_logd("%s: %x destroyed", func, &sem);
 		isAlive = 0;
 	}
 }
 
 ret_e osa_semaphore :: destroy()
 {
+	char * func = "osa_semaphore::destroy";
 	if(1 == isAlive)
 	{
 		int currCount=0;
@@ -291,18 +295,19 @@ ret_e osa_semaphore :: destroy()
 
 		if(0 != result)
 		{
-			osa_loge("osa::semaphore destroy. sem_getvalue failed - %s (%d). something wrong", strerror(errno), errno);
+			osa_loge("%s: sem_getvalue failed - %s (%d). something wrong", func, strerror(errno), errno);
 			return OSA_ERR_COREFUNCFAIL; /* TO DO: Do we just return? assert? call destroy anyways?? */
 		}
 
 		result = sem_destroy(&sem);
 		if(0 != result)
 		{
-			osa_loge("osa::semaphore destroy. sem_destroy failed - %s (%d). something wrong", strerror(errno), errno);
+			osa_loge("%s: sem_destroy failed - %s (%d). something wrong", func, strerror(errno), errno);
 			return OSA_ERR_COREFUNCFAIL; /* TO DO: Do we just return? assert? call destroy anyways?? */
 		}
 
 		isAlive = 0;
+		osa_logd("%s: %x destroyed", func, &sem);
 	}
 }
 
@@ -318,7 +323,7 @@ ret_e osa_semaphore :: wait(char * waiter)
 			return OSA_ERR_COREFUNCFAIL;
 		}
 
-		osa_logv("semaphore %x locked by ", &sem, waiter?waiter:"--");
+		osa_logv("semaphore %x locked by %s", &sem, waiter?waiter:"--");
 	}
 	else
 	{
@@ -353,3 +358,141 @@ ret_e osa_semaphore :: post(char * poster)
 
 	return OSA_SUCCESS;	
 }
+
+
+/********************************************************
+*		C O N D I T I O N A L   V A R I A B L E
+*********************************************************/
+
+
+osa_cond :: osa_cond()
+{
+	isAlive = 0;
+}
+
+ret_e osa_cond :: create()
+{
+	int result = pthread_cond_init(&cond, NULL	);
+
+	if(0 == result)
+	{
+		osa_logd("osa_cond:: created");
+	}
+	else
+	{
+		osa_logd("osa_cond:: creation failed. Error=%s", osa_errStr(result));
+		return OSA_ERR_COREFUNCFAIL;
+	}
+
+	isAlive = 1;
+
+	return OSA_SUCCESS;
+}
+
+osa_cond :: ~osa_cond()
+{
+	if(1 == isAlive)
+	{
+		int result=0;
+		result = pthread_cond_destroy(&cond);
+		if(0 != result)
+		{
+			osa_logd("osa::cond destructor. pthread_cond_destroy failed - %s. something wrong", osa_errStr(result));
+			return; /* TO DO: Do we just return? assert? call destroy anyways?? */
+		}
+
+		isAlive = 0;
+	}
+}
+
+ret_e osa_cond :: destroy()
+{
+	if(1 == isAlive)
+	{
+		int result = pthread_cond_destroy(&cond);
+		if(0 != result)
+		{
+			osa_logd("osa::cond destructor. pthread_cond_destroy failed - %s. something wrong", osa_errStr(result));
+			return OSA_ERR_COREFUNCFAIL; /* TO DO: Do we just return? assert? call destroy anyways?? */
+		}
+
+		isAlive = 0;
+	}
+
+	return OSA_SUCCESS;
+}
+
+ret_e osa_cond :: wait(osa_mutex &m, char * waiter)
+{
+	if(isAlive)
+	{
+		pthread_mutex_t * mutex = (pthread_mutex_t *)m.getNativeMutex();
+		int result = pthread_cond_wait(&cond, mutex);
+
+		if(0 != result)
+		{
+			osa_loge("osa_cond::wait failed. result=\n", osa_errStr(result));
+			return OSA_ERR_COREFUNCFAIL;
+		}
+
+		osa_logv("cond %x locked by %s", &cond, waiter?waiter:"--");
+	}
+	else
+	{
+		osa_logd("cond %x is already destroyed. waiter=%s", &cond, waiter?waiter:"--");
+		osa_assert(1==0);
+	}
+
+	return OSA_SUCCESS;
+}
+
+ret_e osa_cond :: signal(char * poster)
+{
+	char * func = "osa_cond::signal";
+
+	if(isAlive)
+	{
+		int result = pthread_cond_signal(&cond);
+
+		if(0 != result)
+		{
+			osa_loge("%s: failed. result=%s, poster=%s\n", func, osa_errStr(result), poster?poster:"--");
+			return OSA_ERR_COREFUNCFAIL;
+		}
+
+		osa_logv("%s: cond %x signalled by %s", func, &cond, poster?poster:"--");
+	}
+	else
+	{
+		osa_loge("%s: cond %x is destroyed. poster=%s. Dying", func, &cond, poster?poster:"--");
+		osa_assert(0);
+	}
+
+	return OSA_SUCCESS;	
+}
+
+ret_e osa_cond :: broadcast(char * poster)
+{
+	char * func = "osa_cond::broadcast";
+
+	if(isAlive)
+	{
+		int result = pthread_cond_broadcast(&cond);
+
+		if(0 != result)
+		{
+			osa_loge("%s: failed. result=%s, poster=%s\n", func, osa_errStr(result), poster?poster:"--");
+			return OSA_ERR_COREFUNCFAIL;
+		}
+
+		osa_logv("%s: cond %x broadcasted by %s", func, &cond, poster?poster:"--");
+	}
+	else
+	{
+		osa_loge("%s: cond %x is destroyed. broadcaster=%s. Dying", func, &cond, poster?poster:"--");
+		osa_assert(0);
+	}
+
+	return OSA_SUCCESS;	
+}
+
